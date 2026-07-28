@@ -1,10 +1,25 @@
 {
+  "name": "socialmesh-core",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
   "dependencies": {
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.9",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
     "uuid": "^14.0.1"
   },
   "devDependencies": {
-    "@types/uuid": "^10.0.0"
+    "@types/uuid": "^10.0.0",
+    "@types/react": "latest",
+    "@types/node": "latest",
+    "typescript": "latest"
   }
 }

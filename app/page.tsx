@@ -1,5 +1,5 @@
 // app/page.tsx
-'use client';
+"use client";
 
 import { useState } from 'react';
 import { initiateConnection, waitForConnection } from '@/lib/webrtc';
