@@ -1,7 +1,6 @@
-
 // lib/crypto.ts
 
-// 1. Generate a Ed25519 key pair (for signing transactions)
+// 1. Generate an Ed25519 key pair
 export async function generateIdentity(): Promise<{ publicKey: string; privateKey: string }> {
   const keyPair = await crypto.subtle.generateKey(
     { name: "Ed25519" },
@@ -18,7 +17,7 @@ export async function generateIdentity(): Promise<{ publicKey: string; privateKe
   };
 }
 
-// 2. Hash any JSON content to a SHA-256 fingerprint
+// 2. Hash any JSON content
 export async function hashContent(content: any): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(JSON.stringify(content));
@@ -26,7 +25,7 @@ export async function hashContent(content: any): Promise<string> {
   return Buffer.from(hash).toString('hex');
 }
 
-// 3. Sign an activity (proves ownership on the server)
+// 3. Sign an activity
 export async function signActivity(
   privateKey: string,
   activityId: string,
@@ -48,4 +47,32 @@ export async function signActivity(
     encoder.encode(activityId + contentHash)
   );
   return Buffer.from(signature).toString('base64');
+}
+
+// 4. Verify a signature (used on the server)
+export async function verifySignature(
+  publicKey: string,
+  message: string,
+  signature: string
+): Promise<boolean> {
+  try {
+    const keyBuffer = Buffer.from(publicKey, 'base64');
+    const key = await crypto.subtle.importKey(
+      "spki",
+      keyBuffer,
+      { name: "Ed25519" },
+      false,
+      ["verify"]
+    );
+    
+    const encoder = new TextEncoder();
+    return await crypto.subtle.verify(
+      { name: "Ed25519" },
+      key,
+      Buffer.from(signature, 'base64'),
+      encoder.encode(message)
+    );
+  } catch {
+    return false;
+  }
 }
