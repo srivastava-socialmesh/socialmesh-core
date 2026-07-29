@@ -78,7 +78,23 @@ export default function Home() {
             connected={connected}
             targetId={targetId}
           />
-
+         <CreatePost
+           userId={userId}
+           postText={postText}
+           setPostText={setPostText}
+           postMedia={postMedia}
+           setPostMedia={setPostMedia}
+           createPost={createPost}
+          />
+        <ProfileCard
+           userId={userId}
+           profile={myProfile}
+           onEdit={() => {}}
+           onSave={saveProfile}  // <-- new prop
+           followingCount={following.length}
+           postsCount={feed.length}
+           connectionsCount={dmContacts.length}
+         />
           <main className="flex-1 min-w-0">
             {activeTab === 'feed' && (
               <>

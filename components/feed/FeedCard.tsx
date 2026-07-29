@@ -51,6 +51,17 @@ export function FeedCard({
           </button>
         </div>
 
+        {content && content.media && (
+          <div className="mt-4">
+            {content.media.type === 'image' && (
+              <img src={content.media.data} alt="post" className="rounded-lg max-h-96 w-full object-contain" />
+            )}
+            {content.media.type === 'video' && (
+              <video src={content.media.data} controls className="rounded-lg max-h-96 w-full" />
+            )}
+          </div>
+        )}
+
         <div className="mt-4 text-gray-800 whitespace-pre-wrap text-base leading-relaxed">
           {content ? content.text : (
             <span className="text-gray-400">Loading content...</span>
