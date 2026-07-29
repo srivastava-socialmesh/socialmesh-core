@@ -36,9 +36,13 @@ export default function Home() {
 
   // Load feed from Supabase (global recent activities)
   const loadFeed = async () => {
-    const res = await fetch(`/api/feed`);
-    const data = await res.json();
-    setFeed(data.activities || []);
+    try {
+      const res = await fetch(`/api/feed`);
+      const data = await res.json();
+      setFeed(data.activities || []);
+    } catch (e) {
+      console.error('Failed to load feed:', e);
+    }
   };
 
   // Create a post
@@ -74,22 +78,7 @@ export default function Home() {
   const startAsInitiator = async () => {
     if (!userId) return alert('Register first');
     const { sendData } = await initiateConnection(userId, targetId, (data) => {
-      // Handle incoming P2P messages (content requests/responses)
-      try {
-        const msg = JSON.parse(data);
-        if (msg.type === 'request_content') {
-          const content = getContent(msg.activityId);
-          if (content) {
-            sendData(JSON.stringify({ type: 'content_response', activityId: msg.activityId, content }));
-          }
-        } else if (msg.type === 'content_response') {
-          // Save received content locally
-          saveContent(msg.activityId, msg.content);
-          loadFeed(); // refresh feed to show new content
-        }
-      } catch (e) {
-        console.error('P2P message error:', e);
-      }
+      handleP2PMessage(data, sendData);
     });
     setSendP2P(() => sendData);
     setConnected(true);
@@ -98,27 +87,32 @@ export default function Home() {
   const startAsListener = async () => {
     if (!userId) return alert('Register first');
     const { sendData } = await waitForConnection(userId, (data) => {
-      // Same handlers as above
-      try {
-        const msg = JSON.parse(data);
-        if (msg.type === 'request_content') {
-          const content = getContent(msg.activityId);
-          if (content) {
-            sendData(JSON.stringify({ type: 'content_response', activityId: msg.activityId, content }));
-          }
-        } else if (msg.type === 'content_response') {
-          saveContent(msg.activityId, msg.content);
-          loadFeed();
-        }
-      } catch (e) {
-        console.error('P2P message error:', e);
-      }
+      handleP2PMessage(data, sendData);
     });
     setSendP2P(() => sendData);
     setConnected(true);
   };
 
-  // Load user from localStorage on mount
+  // Handle incoming P2P messages (content requests/responses)
+  const handleP2PMessage = (data: string, sendFn: (msg: string) => void) => {
+    try {
+      const msg = JSON.parse(data);
+      if (msg.type === 'request_content') {
+        const content = getContent(msg.activityId);
+        if (content) {
+          sendFn(JSON.stringify({ type: 'content_response', activityId: msg.activityId, content }));
+        }
+      } else if (msg.type === 'content_response') {
+        // Save received content locally
+        saveContent(msg.activityId, msg.content);
+        loadFeed(); // refresh feed to show new content
+      }
+    } catch (e) {
+      console.error('P2P message error:', e);
+    }
+  };
+
+  // Load user from localStorage on mount & set up Supabase Realtime
   useEffect(() => {
     const savedUserId = localStorage.getItem('userId');
     if (savedUserId) {
@@ -127,27 +121,27 @@ export default function Home() {
       setPrivateKey(localStorage.getItem('privateKey') || '');
       loadFeed();
     }
+
+    // Supabase Realtime subscription for new activities
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
+    const channel = supabase
+      .channel('activities-channel')
+      .on('postgres_changes', 
+        { event: 'INSERT', schema: 'public', table: 'activities' },
+        () => {
+          loadFeed(); // refresh feed
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-const subscription = supabase
-  .channel('activities-channel')
-  .on('postgres_changes', 
-    { event: 'INSERT', schema: 'public', table: 'activities' },
-    (payload) => {
-      // New activity received
-      loadFeed(); // refresh feed
-    }
-  )
-  .subscribe();
-
-return () => {
-  supabase.removeChannel(subscription);
-};
 
   return (
     <main className="p-8 max-w-3xl mx-auto">
