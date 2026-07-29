@@ -30,6 +30,9 @@ export function useSocialMesh() {
   const [dmMessages, setDmMessages] = useState<{ [contact: string]: DM[] }>({});
   const [dmInput, setDmInput] = useState('');
   const [tick, setTick] = useState(0);
+  // Friends
+  const [friends, setFriends] = useState<string[]>([]);
+  const [friendRequests, setFriendRequests] = useState<Activity[]>([]);
 
   // ---- Helper functions (hoisted) ----
 
@@ -43,8 +46,33 @@ export function useSocialMesh() {
     localStorage.setItem('following', JSON.stringify(list));
   }
 
+  function loadFriends() {
+    const saved = localStorage.getItem('friends');
+    if (saved) setFriends(JSON.parse(saved));
+  }
+
+  function saveFriends(list: string[]) {
+    setFriends(list);
+    localStorage.setItem('friends', JSON.stringify(list));
+  }
+
   async function loadMyProfile() {
     if (!userId) return;
+    // 1. Try local storage first
+    const allContent = getAllContent();
+    const profileId = Object.keys(allContent).find(id => {
+      const c = allContent[id];
+      return c.name && c.bio && c.author === userId;
+    });
+    if (profileId) {
+      const content = allContent[profileId];
+      setMyProfile(content);
+      setProfileName(content.name || '');
+      setProfileBio(content.bio || '');
+      setProfileAvatar(content.avatarHash || '');
+      return;
+    }
+    // 2. Fallback to API
     const res = await fetch(`/api/feed?userId=${userId}`);
     const data = await res.json();
     const profileActivity = data.activities?.find((a: any) => a.activity_type === 'PROFILE' && a.author_id === userId);
@@ -55,6 +83,7 @@ export function useSocialMesh() {
         setProfileName(content.name || '');
         setProfileBio(content.bio || '');
         setProfileAvatar(content.avatarHash || '');
+        saveContent(`profile_${userId}`, content);
       }
     }
   }
@@ -73,6 +102,16 @@ export function useSocialMesh() {
     } catch (e) {
       console.error('Failed to load feed:', e);
     }
+  }
+
+  async function loadFriendRequests() {
+    if (!userId) return;
+    const res = await fetch(`/api/feed?userId=${userId}`);
+    const data = await res.json();
+    const requests = data.activities?.filter((a: any) => 
+      a.activity_type === 'FRIEND_REQUEST' && a.parent_id === userId
+    ) || [];
+    setFriendRequests(requests);
   }
 
   // ---- Core functions ----
@@ -94,8 +133,10 @@ export function useSocialMesh() {
       localStorage.setItem('publicKey', identity.publicKey);
       localStorage.setItem('privateKey', identity.privateKey);
       loadFollowing();
+      loadFriends();
       loadFeed();
       loadMyProfile();
+      loadFriendRequests();
     } catch (error) {
       console.error('Registration error:', error);
       alert('Registration failed. Check console.');
@@ -107,8 +148,10 @@ export function useSocialMesh() {
     localStorage.removeItem('publicKey');
     localStorage.removeItem('privateKey');
     localStorage.removeItem('following');
+    localStorage.removeItem('friends');
     setUserId(null);
     setFollowing([]);
+    setFriends([]);
     setFeed([]);
     setConnected(false);
     setSendP2P(null);
@@ -117,7 +160,7 @@ export function useSocialMesh() {
 
   async function saveProfile(name: string, bio: string, avatarBase64?: string) {
     if (!userId || !privateKey) return alert('Register first');
-    const content: Profile = { name, bio };
+    const content: Profile = { name, bio, author: userId };
     if (avatarBase64) content.avatarHash = avatarBase64;
     const contentHash = await hashContent(content);
     const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
@@ -130,6 +173,8 @@ export function useSocialMesh() {
     });
     setMyProfile(content);
     if (avatarBase64) setProfileAvatar(avatarBase64);
+    // Also save in local storage for quick retrieval
+    saveContent(`profile_${userId}`, content);
     alert('Profile saved!');
   }
 
@@ -347,6 +392,65 @@ export function useSocialMesh() {
     }).length;
   }
 
+  // ---- Friend functions ----
+  async function sendFriendRequest(targetUserId: string) {
+    if (!userId || !privateKey) return alert('Register first');
+    if (friends.includes(targetUserId)) return alert('Already friends');
+    const allContent = getAllContent();
+    const existingReq = Object.keys(allContent).find(id => {
+      const c = allContent[id];
+      return c.type === 'FRIEND_REQUEST' && c.sender === userId && c.target === targetUserId;
+    });
+    if (existingReq) return alert('Request already sent');
+
+    const content = { type: 'FRIEND_REQUEST', sender: userId, target: targetUserId, timestamp: Date.now() };
+    const contentHash = await hashContent(content);
+    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
+    const signature = await signActivity(privateKey, activityId, contentHash);
+    saveContent(activityId, content);
+    await fetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        activityId,
+        type: 'FRIEND_REQUEST',
+        parentId: targetUserId,
+        rootId: null,
+        contentHash,
+        signature,
+        userId
+      })
+    });
+    alert('Friend request sent!');
+    loadFriendRequests();
+  }
+
+  async function acceptFriendRequest(requestId: string, senderId: string) {
+    if (!userId || !privateKey) return alert('Register first');
+    const content = { type: 'FRIEND_ACCEPT', sender: userId, target: senderId, timestamp: Date.now() };
+    const contentHash = await hashContent(content);
+    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
+    const signature = await signActivity(privateKey, activityId, contentHash);
+    saveContent(activityId, content);
+    await fetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        activityId,
+        type: 'FRIEND_ACCEPT',
+        parentId: requestId,
+        rootId: null,
+        contentHash,
+        signature,
+        userId
+      })
+    });
+    const newFriends = [...friends, senderId];
+    saveFriends(newFriends);
+    loadFriendRequests();
+    alert('Friend request accepted!');
+  }
+
   // ---- useEffect ----
   useEffect(() => {
     const savedUserId = localStorage.getItem('userId');
@@ -357,12 +461,16 @@ export function useSocialMesh() {
       setPublicKey(savedPubKey);
       setPrivateKey(savedPrivKey);
       loadFollowing();
+      loadFriends();
       loadFeed();
       loadMyProfile();
+      loadFriendRequests();
     } else {
       localStorage.removeItem('userId');
       localStorage.removeItem('publicKey');
       localStorage.removeItem('privateKey');
+      localStorage.removeItem('following');
+      localStorage.removeItem('friends');
       setUserId(null);
     }
 
@@ -372,7 +480,10 @@ export function useSocialMesh() {
     );
     const channel = supabase
       .channel('activities-channel')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activities' }, () => loadFeed())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activities' }, () => {
+        loadFeed();
+        loadFriendRequests();
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
@@ -405,6 +516,8 @@ export function useSocialMesh() {
     setDmInput,
     setTargetId,
     setSelectedContact,
+    friends,
+    friendRequests,
     registerIdentity,
     resetIdentity,
     loadMyProfile,
@@ -420,5 +533,8 @@ export function useSocialMesh() {
     likePost,
     hasLiked,
     tick,
+    sendFriendRequest,
+    acceptFriendRequest,
+    loadFriendRequests,
   };
 }

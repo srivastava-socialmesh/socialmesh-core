@@ -5,6 +5,7 @@ import { TopNavbar, LeftSidebar, RightSidebar } from '@/components/layout';
 import { StoryCarousel, CreatePost, FeedList } from '@/components/feed';
 import { ProfileCard } from '@/components/profile';
 import { MessageLayout } from '@/components/messages';
+import { FriendsList } from '@/components/friends/FriendsList';
 import { FloatingButton } from '@/components/common';
 import { useState } from 'react';
 
@@ -48,9 +49,14 @@ export default function Home() {
     likePost,
     hasLiked,
     tick,
+    friends,
+    friendRequests,
+    sendFriendRequest,
+    acceptFriendRequest,
+    loadFriendRequests,
   } = useSocialMesh();
 
-  const [activeTab, setActiveTab] = useState<'feed' | 'profile' | 'messages'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'profile' | 'messages' | 'friends'>('feed');
 
   if (!userId) {
     return (
@@ -132,6 +138,10 @@ export default function Home() {
                 setTargetId={setTargetId}
                 connected={connected}
               />
+            )}
+
+            {activeTab === 'friends' && (
+              <FriendsList />
             )}
           </main>
 
