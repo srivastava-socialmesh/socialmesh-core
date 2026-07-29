@@ -50,6 +50,20 @@ export default function Home() {
     }
   };
 
+  // Reset identity (clear local storage)
+  const resetIdentity = () => {
+    localStorage.removeItem('userId');
+    localStorage.removeItem('publicKey');
+    localStorage.removeItem('privateKey');
+    setUserId(null);
+    setPublicKey('');
+    setPrivateKey('');
+    setFeed([]);
+    setConnected(false);
+    setSendP2P(null);
+    window.location.reload(); // refresh to reset everything
+  };
+
   // Load feed from Supabase
   const loadFeed = async () => {
     try {
@@ -150,11 +164,21 @@ export default function Home() {
   // Load user & set up Supabase Realtime
   useEffect(() => {
     const savedUserId = localStorage.getItem('userId');
-    if (savedUserId) {
+    const savedPubKey = localStorage.getItem('publicKey');
+    const savedPrivKey = localStorage.getItem('privateKey');
+    
+    // Only treat as registered if all three exist
+    if (savedUserId && savedPubKey && savedPrivKey) {
       setUserId(savedUserId);
-      setPublicKey(localStorage.getItem('publicKey') || '');
-      setPrivateKey(localStorage.getItem('privateKey') || '');
+      setPublicKey(savedPubKey);
+      setPrivateKey(savedPrivKey);
       loadFeed();
+    } else {
+      // If any missing, clear all to show register button
+      localStorage.removeItem('userId');
+      localStorage.removeItem('publicKey');
+      localStorage.removeItem('privateKey');
+      setUserId(null);
     }
 
     const supabase = createClient(
@@ -185,7 +209,12 @@ export default function Home() {
           Register New Identity
         </button>
       ) : (
-        <div className="my-4">User ID: {userId.slice(0,8)}...</div>
+        <div className="my-4 flex items-center gap-4">
+          <span>User ID: {userId.slice(0,8)}...</span>
+          <button onClick={resetIdentity} className="bg-red-500 text-white px-3 py-1 rounded text-sm">
+            Reset Identity
+          </button>
+        </div>
       )}
 
       <div className="border p-4 my-4">
