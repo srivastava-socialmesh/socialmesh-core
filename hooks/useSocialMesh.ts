@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 type Activity = { activity_id: string; author_id: string; activity_type: string; parent_id: string | null; root_id: string | null; content_hash: string; created_at: string; };
 type Profile = { name: string; bio: string; avatarHash?: string };
 type DM = { text: string; sender: string; receiver: string; timestamp: number };
-type Media = { type: 'image' | 'video'; data: string }; // base64
+type Media = { type: 'image' | 'video'; data: string };
 
 export function useSocialMesh() {
   // ---- State ----
@@ -23,7 +23,7 @@ export function useSocialMesh() {
   const [postMedia, setPostMedia] = useState<Media | null>(null);
   const [profileName, setProfileName] = useState('');
   const [profileBio, setProfileBio] = useState('');
-  const [profileAvatar, setProfileAvatar] = useState<string>(''); // base64
+  const [profileAvatar, setProfileAvatar] = useState<string>('');
   const [myProfile, setMyProfile] = useState<Profile | null>(null);
   const [dmContacts, setDmContacts] = useState<string[]>([]);
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
@@ -31,9 +31,53 @@ export function useSocialMesh() {
   const [dmInput, setDmInput] = useState('');
   const [tick, setTick] = useState(0);
 
+  // ---- Helper functions (hoisted) ----
+
+  function loadFollowing() {
+    const saved = localStorage.getItem('following');
+    if (saved) setFollowing(JSON.parse(saved));
+  }
+
+  function saveFollowing(list: string[]) {
+    setFollowing(list);
+    localStorage.setItem('following', JSON.stringify(list));
+  }
+
+  async function loadMyProfile() {
+    if (!userId) return;
+    const res = await fetch(`/api/feed?userId=${userId}`);
+    const data = await res.json();
+    const profileActivity = data.activities?.find((a: any) => a.activity_type === 'PROFILE' && a.author_id === userId);
+    if (profileActivity) {
+      const content = getContent(profileActivity.activity_id);
+      if (content) {
+        setMyProfile(content);
+        setProfileName(content.name || '');
+        setProfileBio(content.bio || '');
+        setProfileAvatar(content.avatarHash || '');
+      }
+    }
+  }
+
+  async function loadFeed() {
+    try {
+      const res = await fetch(`/api/feed`);
+      const data = await res.json();
+      let activities = data.activities || [];
+      activities = activities.filter((a: any) => a.activity_type === 'POST');
+      if (following.length > 0) {
+        activities = activities.filter((a: any) => following.includes(a.author_id));
+      }
+      setFeed(activities);
+      console.log('Feed loaded:', activities.length, 'posts');
+    } catch (e) {
+      console.error('Failed to load feed:', e);
+    }
+  }
+
   // ---- Core functions ----
 
-  const registerIdentity = async () => {
+  async function registerIdentity() {
     try {
       const identity = await generateIdentity();
       setPublicKey(identity.publicKey);
@@ -56,9 +100,9 @@ export function useSocialMesh() {
       console.error('Registration error:', error);
       alert('Registration failed. Check console.');
     }
-  };
+  }
 
-  const resetIdentity = () => {
+  function resetIdentity() {
     localStorage.removeItem('userId');
     localStorage.removeItem('publicKey');
     localStorage.removeItem('privateKey');
@@ -69,25 +113,9 @@ export function useSocialMesh() {
     setConnected(false);
     setSendP2P(null);
     window.location.reload();
-  };
+  }
 
-  const loadMyProfile = async () => {
-    if (!userId) return;
-    const res = await fetch(`/api/feed?userId=${userId}`);
-    const data = await res.json();
-    const profileActivity = data.activities?.find((a: any) => a.activity_type === 'PROFILE' && a.author_id === userId);
-    if (profileActivity) {
-      const content = getContent(profileActivity.activity_id);
-      if (content) {
-        setMyProfile(content);
-        setProfileName(content.name || '');
-        setProfileBio(content.bio || '');
-        setProfileAvatar(content.avatarHash || '');
-      }
-    }
-  };
-
-  const saveProfile = async (name: string, bio: string, avatarBase64?: string) => {
+  async function saveProfile(name: string, bio: string, avatarBase64?: string) {
     if (!userId || !privateKey) return alert('Register first');
     const content: Profile = { name, bio };
     if (avatarBase64) content.avatarHash = avatarBase64;
@@ -103,32 +131,16 @@ export function useSocialMesh() {
     setMyProfile(content);
     if (avatarBase64) setProfileAvatar(avatarBase64);
     alert('Profile saved!');
-  };
+  }
 
-  const loadFeed = async () => {
-    try {
-      const res = await fetch(`/api/feed`);
-      const data = await res.json();
-      let activities = data.activities || [];
-      activities = activities.filter((a: any) => a.activity_type === 'POST');
-      if (following.length > 0) {
-        activities = activities.filter((a: any) => following.includes(a.author_id));
-      }
-      setFeed(activities);
-      console.log('Feed loaded:', activities.length, 'posts');
-    } catch (e) {
-      console.error('Failed to load feed:', e);
-    }
-  };
-
-  const createPost = async (text: string, media?: Media) => {
+  async function createPost(text: string, media?: Media) {
     const storedUserId = localStorage.getItem('userId');
     const storedPrivateKey = localStorage.getItem('privateKey');
     if (!storedUserId || !storedPrivateKey) return alert('Register first');
     if (!text.trim() && !media) return;
     const content: any = { text, timestamp: Date.now(), author: storedUserId };
     if (media) {
-      content.media = media; // { type: 'image'|'video', data: base64 }
+      content.media = media;
     }
     const contentHash = await hashContent(content);
     const activityId = await hashContent({ author: storedUserId, contentHash, nonce: Math.random() });
@@ -142,13 +154,198 @@ export function useSocialMesh() {
     setPostText('');
     setPostMedia(null);
     loadFeed();
-  };
+  }
 
-  // ---- Following / Follow / DM (unchanged) ----
-  // ... (copy the existing loadFollowing, saveFollowing, followUser, sendDM, requestDMHistory, handleP2PMessage, startAsInitiator, startAsListener, likePost, hasLiked, getLikeCount)
+  async function followUser(targetUserId: string) {
+    if (!userId || !privateKey) return alert('Register first');
+    if (following.includes(targetUserId)) {
+      saveFollowing(following.filter(id => id !== targetUserId));
+      loadFeed();
+      return;
+    }
+    const content = { action: 'follow', target: targetUserId, timestamp: Date.now() };
+    const contentHash = await hashContent(content);
+    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
+    const signature = await signActivity(privateKey, activityId, contentHash);
+    saveContent(activityId, content);
+    await fetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activityId, type: 'FOLLOW', parentId: targetUserId, rootId: null, contentHash, signature, userId })
+    });
+    saveFollowing([...following, targetUserId]);
+    loadFeed();
+  }
 
-  // ---- (We'll keep the rest of the functions identical) ----
-  // For brevity, I'll include them in the final CAT output.
+  async function sendDM(receiver: string, text: string) {
+    if (!userId || !privateKey) return alert('Register first');
+    if (!text.trim()) return;
+    if (!sendP2P) return alert('P2P not connected');
+    const content: DM = { text, sender: userId, receiver, timestamp: Date.now() };
+    const contentHash = await hashContent(content);
+    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
+    const signature = await signActivity(privateKey, activityId, contentHash);
+    saveContent(activityId, content);
+    sendP2P(JSON.stringify({ type: 'dm_message', activityId, content, signature }));
+    setDmMessages(prev => ({ ...prev, [receiver]: [...(prev[receiver] || []), content] }));
+    setDmInput('');
+  }
+
+  async function requestDMHistory(contact: string) {
+    if (!sendP2P) return;
+    sendP2P(JSON.stringify({ type: 'request_dm_history', contactId: contact }));
+  }
+
+  function handleP2PMessage(data: string, sendFn: (msg: string) => void) {
+    console.log('P2P message received:', data);
+    try {
+      const msg = JSON.parse(data);
+      switch (msg.type) {
+        case 'request_content': {
+          const content = getContent(msg.activityId);
+          if (content) sendFn(JSON.stringify({ type: 'content_response', activityId: msg.activityId, content }));
+          break;
+        }
+        case 'content_response': {
+          saveContent(msg.activityId, msg.content);
+          loadFeed();
+          break;
+        }
+        case 'request_profile': {
+          if (myProfile) sendFn(JSON.stringify({ type: 'profile_response', profile: myProfile }));
+          break;
+        }
+        case 'profile_response': {
+          const profileId = `profile_${Date.now()}`;
+          saveContent(profileId, { ...msg.profile, author: targetId });
+          alert('Profile received!');
+          break;
+        }
+        case 'dm_message': {
+          saveContent(msg.activityId, msg.content);
+          const contact = msg.content.sender;
+          setDmMessages(prev => ({ ...prev, [contact]: [...(prev[contact] || []), msg.content] }));
+          if (!dmContacts.includes(contact)) setDmContacts(prev => [...prev, contact]);
+          break;
+        }
+        case 'request_dm_history': {
+          const allContent = getAllContent();
+          const dms = Object.keys(allContent)
+            .filter(id => {
+              const c = allContent[id];
+              return c.sender && c.receiver && (c.sender === msg.contactId || c.receiver === msg.contactId);
+            })
+            .map(id => allContent[id]);
+          sendFn(JSON.stringify({ type: 'dm_history_response', messages: dms }));
+          break;
+        }
+        case 'dm_history_response': {
+          msg.messages.forEach((dm: DM) => {
+            const id = `dm_${dm.sender}_${dm.receiver}_${dm.timestamp}`;
+            saveContent(id, dm);
+            const contact = dm.sender === userId ? dm.receiver : dm.sender;
+            setDmMessages(prev => ({ ...prev, [contact]: [...(prev[contact] || []), dm] }));
+            if (!dmContacts.includes(contact)) setDmContacts(prev => [...prev, contact]);
+          });
+          break;
+        }
+        case 'new_like': {
+          console.log('Received new_like via P2P:', msg);
+          saveContent(msg.activityId, msg.content);
+          loadFeed();
+          break;
+        }
+        default: console.log('Unknown P2P message type:', msg.type);
+      }
+    } catch (e) {
+      console.error('P2P message error:', e);
+    }
+  }
+
+  async function startAsInitiator() {
+    if (!userId) return alert('Register first');
+    const { sendData } = await initiateConnection(userId, targetId, (data) => {
+      handleP2PMessage(data, sendData);
+    });
+    setSendP2P(() => sendData);
+    setConnected(true);
+    setTimeout(() => requestDMHistory(targetId), 1000);
+  }
+
+  async function startAsListener() {
+    if (!userId) return alert('Register first');
+    const { sendData } = await waitForConnection(userId, (data) => {
+      handleP2PMessage(data, sendData);
+    });
+    setSendP2P(() => sendData);
+    setConnected(true);
+  }
+
+  // ---- Like functionality ----
+  async function likePost(postId: string, authorId: string) {
+    console.log('likePost called for post:', postId);
+    if (!userId || !privateKey) {
+      alert('Register first');
+      return;
+    }
+    const allContent = getAllContent();
+    const existingLike = Object.keys(allContent).find(id => {
+      const c = allContent[id];
+      return c.parentId === postId && c.action === 'LIKE' && c.sender === userId;
+    });
+    if (existingLike) {
+      alert('You already liked this post');
+      return;
+    }
+    const content = { action: 'LIKE', target: postId, sender: userId, timestamp: Date.now() };
+    const contentHash = await hashContent(content);
+    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
+    const signature = await signActivity(privateKey, activityId, contentHash);
+    console.log('Saving like locally:', activityId);
+    saveContent(activityId, { ...content, parentId: postId });
+    const res = await fetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        activityId,
+        type: 'LIKE',
+        parentId: postId,
+        rootId: postId,
+        contentHash,
+        signature,
+        userId
+      })
+    });
+    const data = await res.json();
+    console.log('Server response for like:', data);
+    if (!res.ok) {
+      console.error('Server error on like:', data);
+      alert('Failed to like: ' + (data.error || 'Unknown error'));
+      return;
+    }
+    if (sendP2P) {
+      console.log('Broadcasting like via P2P');
+      sendP2P(JSON.stringify({ type: 'new_like', activityId, content, signature }));
+    }
+    setTick(prev => prev + 1);
+    loadFeed();
+  }
+
+  function hasLiked(postId: string): boolean {
+    const allContent = getAllContent();
+    return Object.keys(allContent).some(id => {
+      const c = allContent[id];
+      return c.parentId === postId && c.action === 'LIKE' && c.sender === userId;
+    });
+  }
+
+  function getLikeCount(activityId: string): number {
+    const allContent = getAllContent();
+    return Object.keys(allContent).filter(id => {
+      const c = allContent[id];
+      return c.parentId === activityId && c.action === 'LIKE';
+    }).length;
+  }
 
   // ---- useEffect ----
   useEffect(() => {
