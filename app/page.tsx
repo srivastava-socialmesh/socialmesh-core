@@ -1,4 +1,3 @@
-// app/page.tsx
 "use client";
 
 import { useSocialMesh } from '@/hooks/useSocialMesh';
@@ -17,22 +16,28 @@ export default function Home() {
     connected,
     feed,
     postText,
+    setPostText,
+    postMedia,
+    setPostMedia,
     profileName,
+    setProfileName,
     profileBio,
+    setProfileBio,
+    profileAvatar,
+    setProfileAvatar,
     myProfile,
     dmContacts,
     selectedContact,
     dmMessages,
     dmInput,
-    setTargetId,
-    setPostText,
-    setProfileName,
-    setProfileBio,
-    setSelectedContact,
     setDmInput,
+    setTargetId,
+    setSelectedContact,
     registerIdentity,
     resetIdentity,
+    loadMyProfile,
     saveProfile,
+    loadFeed,
     createPost,
     followUser,
     sendDM,
@@ -40,12 +45,13 @@ export default function Home() {
     startAsInitiator,
     startAsListener,
     getLikeCount,
-    loadFeed,
+    likePost,
+    hasLiked,
+    tick,
   } = useSocialMesh();
 
   const [activeTab, setActiveTab] = useState<'feed' | 'profile' | 'messages'>('feed');
 
-  // If not registered, show registration screen
   if (!userId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -78,23 +84,7 @@ export default function Home() {
             connected={connected}
             targetId={targetId}
           />
-         <CreatePost
-           userId={userId}
-           postText={postText}
-           setPostText={setPostText}
-           postMedia={postMedia}
-           setPostMedia={setPostMedia}
-           createPost={createPost}
-          />
-        <ProfileCard
-           userId={userId}
-           profile={myProfile}
-           onEdit={() => {}}
-           onSave={saveProfile}  // <-- new prop
-           followingCount={following.length}
-           postsCount={feed.length}
-           connectionsCount={dmContacts.length}
-         />
+
           <main className="flex-1 min-w-0">
             {activeTab === 'feed' && (
               <>
@@ -104,6 +94,8 @@ export default function Home() {
                     userId={userId}
                     postText={postText}
                     setPostText={setPostText}
+                    postMedia={postMedia}
+                    setPostMedia={setPostMedia}
                     createPost={createPost}
                   />
                   <FeedList />
@@ -115,7 +107,8 @@ export default function Home() {
               <ProfileCard
                 userId={userId}
                 profile={myProfile}
-                onEdit={() => {}} // future edit modal
+                onEdit={() => {}}
+                onSave={saveProfile}
                 followingCount={following.length}
                 postsCount={feed.length}
                 connectionsCount={dmContacts.length}
