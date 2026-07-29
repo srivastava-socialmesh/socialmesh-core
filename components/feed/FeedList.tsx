@@ -6,7 +6,6 @@ import { useEffect } from 'react';
 export function FeedList() {
   const { feed, following, getLikeCount, followUser, sendP2P, likePost, hasLiked } = useSocialMesh();
 
-  // Auto-fetch missing content when feed loads and P2P is connected
   useEffect(() => {
     if (sendP2P) {
       feed.forEach(activity => {
