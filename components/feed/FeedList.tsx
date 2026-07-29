@@ -1,6 +1,7 @@
 // components/feed/FeedList.tsx
 import { FeedCard } from './FeedCard';
 import { useSocialMesh } from '@/hooks/useSocialMesh';
+import { getContent } from '@/lib/storage';  // 👈 Add this import
 
 export function FeedList() {
   const { feed, following, getLikeCount, followUser, sendP2P } = useSocialMesh();
@@ -17,7 +18,7 @@ export function FeedList() {
   return (
     <div className="space-y-6">
       {feed.map((activity) => {
-        const content = getContent(activity.activity_id);
+        const content = getContent(activity.activity_id);  // ✅ Now works
         const isFollowing = following.includes(activity.author_id);
         const likes = getLikeCount(activity.activity_id);
         return (
