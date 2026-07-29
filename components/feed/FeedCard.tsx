@@ -12,6 +12,7 @@ interface FeedCardProps {
   likes: number;
   hasLiked: boolean;
   friendStatus: 'friend' | 'pending' | 'none';
+  authorProfile?: { name: string; avatarHash?: string } | null;
   onFollow: () => void;
   onLike: () => void;
   onSendFriendRequest: () => void;
@@ -26,20 +27,24 @@ export function FeedCard({
   likes,
   hasLiked,
   friendStatus,
+  authorProfile,
   onFollow,
   onLike,
   onSendFriendRequest,
   onFetchP2P,
   sendP2P,
 }: FeedCardProps) {
+  const displayName = authorProfile?.name || activity.author_id.slice(0, 8);
+  const avatarSrc = authorProfile?.avatarHash || undefined;
+
   return (
     <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 transition hover:shadow-xl">
       <div className="p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Avatar name={activity.author_id} size="lg" />
+            <Avatar name={displayName} src={avatarSrc} size="lg" />
             <div>
-              <p className="font-bold text-gray-800 text-lg">{activity.author_id.slice(0, 8)}</p>
+              <p className="font-bold text-gray-800 text-lg">{displayName}</p>
               <p className="text-sm text-gray-400">{new Date(activity.created_at).toLocaleString()}</p>
             </div>
           </div>

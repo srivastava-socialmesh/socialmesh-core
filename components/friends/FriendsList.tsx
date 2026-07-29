@@ -4,24 +4,38 @@ import { Avatar } from '@/components/common';
 
 export function FriendsList() {
   const { 
-    userId, friends, friendRequests, sentRequests,
-    sendFriendRequest, acceptFriendRequest,
-    loadFriendRequests, loadSentRequests, isFriendOrPending
+    userId, 
+    friends = [], 
+    friendRequests = [], 
+    sentRequests = [],
+    sendFriendRequest, 
+    acceptFriendRequest,
+    loadFriendRequests, 
+    loadSentRequests, 
+    isFriendOrPending 
   } = useSocialMesh();
+
   const [searchUserId, setSearchUserId] = useState('');
   const [searchResult, setSearchResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (userId) {
-      loadFriendRequests();
-      loadSentRequests();
+      try {
+        loadFriendRequests();
+        loadSentRequests();
+      } catch (err) {
+        console.error('Error loading friend data:', err);
+        setError('Failed to load friend data');
+      }
     }
   }, [userId]);
 
   const handleSearch = async () => {
     if (!searchUserId.trim()) return;
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/feed?userId=${searchUserId}`);
       const data = await res.json();
@@ -32,16 +46,25 @@ export function FriendsList() {
         setSearchResult({ userId: searchUserId, profile });
       } else {
         setSearchResult(null);
-        alert('User not found or has no profile');
+        setError('User not found or has no profile');
       }
     } catch (e) {
       console.error(e);
-      alert('Error searching user');
+      setError('Error searching user');
     }
     setLoading(false);
   };
 
-  const status = searchResult ? isFriendOrPending(searchResult.userId) : 'none';
+  const status = searchResult ? isFriendOrPending?.(searchResult.userId) || 'none' : 'none';
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+        <p className="text-red-500">{error}</p>
+        <button onClick={() => setError(null)} className="text-blue-500">Dismiss</button>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
@@ -75,7 +98,7 @@ export function FriendsList() {
             <span className="text-yellow-500 font-semibold">Pending</span>
           ) : (
             <button
-              onClick={() => sendFriendRequest(searchResult.userId)}
+              onClick={() => sendFriendRequest?.(searchResult.userId)}
               className="bg-blue-500 text-white px-3 py-1 rounded-full text-sm"
             >
               Add Friend
@@ -87,42 +110,51 @@ export function FriendsList() {
       <hr className="my-4" />
 
       <h3 className="font-semibold">Your Friends</h3>
-      {friends.length === 0 && <p className="text-gray-500">No friends yet</p>}
-      <div className="space-y-2">
-        {friends.map(fid => (
-          <div key={fid} className="flex items-center gap-3">
-            <Avatar name={fid} size="sm" />
-            <span>{fid.slice(0, 8)}</span>
-          </div>
-        ))}
-      </div>
+      {!friends || friends.length === 0 ? (
+        <p className="text-gray-500">No friends yet</p>
+      ) : (
+        <div className="space-y-2">
+          {friends.map((fid: string) => (
+            <div key={fid} className="flex items-center gap-3">
+              <Avatar name={fid} size="sm" />
+              <span>{fid.slice(0, 8)}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <hr className="my-4" />
 
       <h3 className="font-semibold">Incoming Friend Requests</h3>
-      {friendRequests.length === 0 && <p className="text-gray-500">No pending requests</p>}
-      {friendRequests.map((req: any) => (
-        <div key={req.activity_id} className="flex items-center justify-between py-2">
-          <span>From: {req.author_id.slice(0, 8)}</span>
-          <button
-            onClick={() => acceptFriendRequest(req.activity_id, req.author_id)}
-            className="bg-green-500 text-white px-3 py-1 rounded-full text-sm"
-          >
-            Accept
-          </button>
-        </div>
-      ))}
+      {!friendRequests || friendRequests.length === 0 ? (
+        <p className="text-gray-500">No pending requests</p>
+      ) : (
+        friendRequests.map((req: any) => (
+          <div key={req.activity_id} className="flex items-center justify-between py-2">
+            <span>From: {req.author_id?.slice(0, 8) || 'Unknown'}</span>
+            <button
+              onClick={() => acceptFriendRequest?.(req.activity_id, req.author_id)}
+              className="bg-green-500 text-white px-3 py-1 rounded-full text-sm"
+            >
+              Accept
+            </button>
+          </div>
+        ))
+      )}
 
       <hr className="my-4" />
 
       <h3 className="font-semibold">Sent Requests</h3>
-      {sentRequests.length === 0 && <p className="text-gray-500">No sent requests</p>}
-      {sentRequests.map((req: any) => (
-        <div key={req.activity_id} className="flex items-center justify-between py-2">
-          <span>To: {req.parent_id.slice(0, 8)}</span>
-          <span className="text-yellow-500 text-sm">Pending</span>
-        </div>
-      ))}
+      {!sentRequests || sentRequests.length === 0 ? (
+        <p className="text-gray-500">No sent requests</p>
+      ) : (
+        sentRequests.map((req: any) => (
+          <div key={req.activity_id} className="flex items-center justify-between py-2">
+            <span>To: {req.parent_id?.slice(0, 8) || 'Unknown'}</span>
+            <span className="text-yellow-500 text-sm">Pending</span>
+          </div>
+        ))
+      )}
     </div>
   );
 }

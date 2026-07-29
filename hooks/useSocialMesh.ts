@@ -30,28 +30,24 @@ export function useSocialMesh() {
   const [dmMessages, setDmMessages] = useState<{ [contact: string]: DM[] }>({});
   const [dmInput, setDmInput] = useState('');
   const [tick, setTick] = useState(0);
-  // Friends
   const [friends, setFriends] = useState<string[]>([]);
   const [friendRequests, setFriendRequests] = useState<Activity[]>([]);
   const [sentRequests, setSentRequests] = useState<Activity[]>([]);
+  const [profiles, setProfiles] = useState<Record<string, Profile>>({});
 
-  // ---- Helper functions (hoisted) ----
-
+  // ---- Helper functions ----
   function loadFollowing() {
     const saved = localStorage.getItem('following');
     if (saved) setFollowing(JSON.parse(saved));
   }
-
   function saveFollowing(list: string[]) {
     setFollowing(list);
     localStorage.setItem('following', JSON.stringify(list));
   }
-
   function loadFriends() {
     const saved = localStorage.getItem('friends');
     if (saved) setFriends(JSON.parse(saved));
   }
-
   function saveFriends(list: string[]) {
     setFriends(list);
     localStorage.setItem('friends', JSON.stringify(list));
@@ -59,32 +55,77 @@ export function useSocialMesh() {
 
   async function loadMyProfile() {
     if (!userId) return;
+    let content = getContent(`profile_${userId}`);
+    if (content && content.name) {
+      setMyProfile(content);
+      setProfileName(content.name);
+      setProfileBio(content.bio);
+      setProfileAvatar(content.avatarHash || '');
+      return;
+    }
     const allContent = getAllContent();
     const profileId = Object.keys(allContent).find(id => {
       const c = allContent[id];
-      return c.name && c.bio && c.author === userId;
+      return c.author === userId && c.name;
     });
     if (profileId) {
-      const content = allContent[profileId];
-      setMyProfile(content);
-      setProfileName(content.name || '');
-      setProfileBio(content.bio || '');
-      setProfileAvatar(content.avatarHash || '');
+      const c = allContent[profileId];
+      setMyProfile(c);
+      setProfileName(c.name);
+      setProfileBio(c.bio);
+      setProfileAvatar(c.avatarHash || '');
+      saveContent(`profile_${userId}`, c);
       return;
     }
     const res = await fetch(`/api/feed?userId=${userId}`);
     const data = await res.json();
     const profileActivity = data.activities?.find((a: any) => a.activity_type === 'PROFILE' && a.author_id === userId);
     if (profileActivity) {
-      const content = getContent(profileActivity.activity_id);
-      if (content) {
-        setMyProfile(content);
-        setProfileName(content.name || '');
-        setProfileBio(content.bio || '');
-        setProfileAvatar(content.avatarHash || '');
-        saveContent(`profile_${userId}`, content);
+      const c = getContent(profileActivity.activity_id);
+      if (c) {
+        setMyProfile(c);
+        setProfileName(c.name || '');
+        setProfileBio(c.bio || '');
+        setProfileAvatar(c.avatarHash || '');
+        saveContent(`profile_${userId}`, c);
       }
     }
+  }
+
+  async function fetchUserProfile(targetUserId: string): Promise<Profile | null> {
+    if (profiles[targetUserId]) return profiles[targetUserId];
+    let content = getContent(`profile_${targetUserId}`);
+    if (content && content.name) {
+      setProfiles(prev => ({ ...prev, [targetUserId]: content }));
+      return content;
+    }
+    const allContent = getAllContent();
+    const profileId = Object.keys(allContent).find(id => {
+      const c = allContent[id];
+      return c.author === targetUserId && c.name;
+    });
+    if (profileId) {
+      const c = allContent[profileId];
+      saveContent(`profile_${targetUserId}`, c);
+      setProfiles(prev => ({ ...prev, [targetUserId]: c }));
+      return c;
+    }
+    try {
+      const res = await fetch(`/api/feed?userId=${targetUserId}`);
+      const data = await res.json();
+      const profileActivity = data.activities?.find((a: any) => a.activity_type === 'PROFILE' && a.author_id === targetUserId);
+      if (profileActivity) {
+        const c = getContent(profileActivity.activity_id);
+        if (c && c.name) {
+          saveContent(`profile_${targetUserId}`, c);
+          setProfiles(prev => ({ ...prev, [targetUserId]: c }));
+          return c;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch profile for', targetUserId, e);
+    }
+    return null;
   }
 
   async function loadFeed() {
@@ -133,7 +174,6 @@ export function useSocialMesh() {
   }
 
   // ---- Core functions ----
-
   async function registerIdentity() {
     try {
       const identity = await generateIdentity();
@@ -202,9 +242,7 @@ export function useSocialMesh() {
     if (!storedUserId || !storedPrivateKey) return alert('Register first');
     if (!text.trim() && !media) return;
     const content: any = { text, timestamp: Date.now(), author: storedUserId };
-    if (media) {
-      content.media = media;
-    }
+    if (media) content.media = media;
     const contentHash = await hashContent(content);
     const activityId = await hashContent({ author: storedUserId, contentHash, nonce: Math.random() });
     const signature = await signActivity(storedPrivateKey, activityId, contentHash);
@@ -342,21 +380,15 @@ export function useSocialMesh() {
     setConnected(true);
   }
 
-  // ---- Like functionality ----
+  // ---- Like ----
   async function likePost(postId: string, authorId: string) {
-    if (!userId || !privateKey) {
-      alert('Register first');
-      return;
-    }
+    if (!userId || !privateKey) { alert('Register first'); return; }
     const allContent = getAllContent();
     const existingLike = Object.keys(allContent).find(id => {
       const c = allContent[id];
       return c.parentId === postId && c.action === 'LIKE' && c.sender === userId;
     });
-    if (existingLike) {
-      alert('You already liked this post');
-      return;
-    }
+    if (existingLike) { alert('You already liked this post'); return; }
     const content = { action: 'LIKE', target: postId, sender: userId, timestamp: Date.now() };
     const contentHash = await hashContent(content);
     const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
@@ -366,13 +398,7 @@ export function useSocialMesh() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        activityId,
-        type: 'LIKE',
-        parentId: postId,
-        rootId: postId,
-        contentHash,
-        signature,
-        userId
+        activityId, type: 'LIKE', parentId: postId, rootId: postId, contentHash, signature, userId
       })
     });
     const data = await res.json();
@@ -381,9 +407,7 @@ export function useSocialMesh() {
       alert('Failed to like: ' + (data.error || 'Unknown error'));
       return;
     }
-    if (sendP2P) {
-      sendP2P(JSON.stringify({ type: 'new_like', activityId, content, signature }));
-    }
+    if (sendP2P) sendP2P(JSON.stringify({ type: 'new_like', activityId, content, signature }));
     setTick(prev => prev + 1);
     loadFeed();
   }
@@ -404,7 +428,7 @@ export function useSocialMesh() {
     }).length;
   }
 
-  // ---- Friend functions ----
+  // ---- Friends ----
   async function sendFriendRequest(targetUserId: string) {
     if (!userId || !privateKey) return alert('Register first');
     if (friends.includes(targetUserId)) return alert('Already friends');
@@ -414,7 +438,6 @@ export function useSocialMesh() {
       return c.type === 'FRIEND_REQUEST' && c.sender === userId && c.target === targetUserId;
     });
     if (existingReq) return alert('Request already sent');
-
     const content = { type: 'FRIEND_REQUEST', sender: userId, target: targetUserId, timestamp: Date.now() };
     const contentHash = await hashContent(content);
     const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
@@ -423,15 +446,7 @@ export function useSocialMesh() {
     await fetch('/api/activity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        activityId,
-        type: 'FRIEND_REQUEST',
-        parentId: targetUserId,
-        rootId: null,
-        contentHash,
-        signature,
-        userId
-      })
+      body: JSON.stringify({ activityId, type: 'FRIEND_REQUEST', parentId: targetUserId, rootId: null, contentHash, signature, userId })
     });
     alert('Friend request sent!');
     loadFriendRequests();
@@ -448,15 +463,7 @@ export function useSocialMesh() {
     await fetch('/api/activity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        activityId,
-        type: 'FRIEND_ACCEPT',
-        parentId: requestId,
-        rootId: null,
-        contentHash,
-        signature,
-        userId
-      })
+      body: JSON.stringify({ activityId, type: 'FRIEND_ACCEPT', parentId: requestId, rootId: null, contentHash, signature, userId })
     });
     const newFriends = [...friends, senderId];
     saveFriends(newFriends);
@@ -488,7 +495,6 @@ export function useSocialMesh() {
       localStorage.removeItem('friends');
       setUserId(null);
     }
-
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -535,9 +541,11 @@ export function useSocialMesh() {
     friends,
     friendRequests,
     sentRequests,
+    profiles,
     registerIdentity,
     resetIdentity,
     loadMyProfile,
+    fetchUserProfile,
     saveProfile,
     loadFeed,
     createPost,
