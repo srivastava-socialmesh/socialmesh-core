@@ -99,7 +99,7 @@ export default function Home() {
               <ProfileCard
                 userId={userId}
                 profile={myProfile}
-                onEdit={() => {}} // open edit modal – can be added later
+                onEdit={() => {}} // future edit modal
                 followingCount={following.length}
                 postsCount={feed.length}
                 connectionsCount={dmContacts.length}

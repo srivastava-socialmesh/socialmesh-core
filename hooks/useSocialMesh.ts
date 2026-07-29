@@ -1,4 +1,3 @@
-// hooks/useSocialMesh.ts
 import { useState, useEffect } from 'react';
 import { generateIdentity, hashContent, signActivity } from '@/lib/crypto';
 import { initiateConnection, waitForConnection } from '@/lib/webrtc';
@@ -28,8 +27,8 @@ export function useSocialMesh() {
   const [dmMessages, setDmMessages] = useState<{ [contact: string]: DM[] }>({});
   const [dmInput, setDmInput] = useState('');
 
-  // ---- Core functions (copy from previous answer) ----
-  // (I'll include them again here to avoid any omissions)
+  // ---- Core functions ----
+
   const registerIdentity = async () => {
     try {
       const identity = await generateIdentity();
@@ -183,6 +182,7 @@ export function useSocialMesh() {
     sendP2P(JSON.stringify({ type: 'request_dm_history', contactId: contact }));
   };
 
+  // ---- P2P message handler ----
   const handleP2PMessage = (data: string, sendFn: (msg: string) => void) => {
     try {
       const msg = JSON.parse(data);
@@ -235,6 +235,11 @@ export function useSocialMesh() {
           });
           break;
         }
+        case 'new_like': {
+          saveContent(msg.activityId, msg.content);
+          loadFeed();
+          break;
+        }
         default: console.log('Unknown P2P message type:', msg.type);
       }
     } catch (e) {
@@ -242,6 +247,7 @@ export function useSocialMesh() {
     }
   };
 
+  // ---- P2P connection ----
   const startAsInitiator = async () => {
     if (!userId) return alert('Register first');
     const { sendData } = await initiateConnection(userId, targetId, (data) => {
@@ -259,6 +265,54 @@ export function useSocialMesh() {
     });
     setSendP2P(() => sendData);
     setConnected(true);
+  };
+
+  // ---- Like functionality ----
+  const likePost = async (postId: string, authorId: string) => {
+    if (!userId || !privateKey) return alert('Register first');
+    // Check if already liked
+    const allContent = getAllContent();
+    const existingLike = Object.keys(allContent).find(id => {
+      const c = allContent[id];
+      return c.parentId === postId && c.action === 'LIKE' && c.sender === userId;
+    });
+    if (existingLike) {
+      alert('You already liked this post');
+      return;
+    }
+    const content = { action: 'LIKE', target: postId, sender: userId, timestamp: Date.now() };
+    const contentHash = await hashContent(content);
+    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
+    const signature = await signActivity(privateKey, activityId, contentHash);
+    // Save locally
+    saveContent(activityId, { ...content, parentId: postId });
+    // Send to server
+    await fetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        activityId,
+        type: 'LIKE',
+        parentId: postId,
+        rootId: postId,
+        contentHash,
+        signature,
+        userId
+      })
+    });
+    // Broadcast to connected peers
+    if (sendP2P) {
+      sendP2P(JSON.stringify({ type: 'new_like', activityId, content, signature }));
+    }
+    loadFeed(); // refresh feed to update like count
+  };
+
+  const hasLiked = (postId: string): boolean => {
+    const allContent = getAllContent();
+    return Object.keys(allContent).some(id => {
+      const c = allContent[id];
+      return c.parentId === postId && c.action === 'LIKE' && c.sender === userId;
+    });
   };
 
   const getLikeCount = (activityId: string): number => {
@@ -299,6 +353,7 @@ export function useSocialMesh() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  // ---- Return ----
   return {
     userId,
     publicKey,
@@ -334,5 +389,7 @@ export function useSocialMesh() {
     startAsInitiator,
     startAsListener,
     getLikeCount,
+    likePost,
+    hasLiked,
   };
 }
