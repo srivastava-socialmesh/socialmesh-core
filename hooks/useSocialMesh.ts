@@ -5,7 +5,7 @@ import { saveContent, getContent, getAllContent } from '@/lib/storage';
 import { createClient } from '@supabase/supabase-js';
 
 type Activity = { activity_id: string; author_id: string; activity_type: string; parent_id: string | null; root_id: string | null; content_hash: string; created_at: string; };
-type Profile = { name: string; bio: string; avatarHash?: string };
+type Profile = { name: string; bio: string; avatarHash?: string; author?: string };
 type DM = { text: string; sender: string; receiver: string; timestamp: number };
 type Media = { type: 'image' | 'video'; data: string };
 
