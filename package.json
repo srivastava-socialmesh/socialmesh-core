@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-   "node": "18.x"
-    },
+    "node": "18.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -23,15 +23,15 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "uuid": "^14.0.1"
+    "uuid": "^14.0.1",
     "tailwindcss": "^3.4.0",
     "postcss": "^8.4.31",
     "autoprefixer": "^10.4.16"
+  },
+  "devDependencies": {
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/uuid": "^10.0.0",
-    "autoprefixer": "^10.5.4",
-    "postcss": "^8.5.25",
     "typescript": "^5.6.3"
   }
 }
