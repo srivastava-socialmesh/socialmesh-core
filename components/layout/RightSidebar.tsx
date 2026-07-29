@@ -1,6 +1,4 @@
 // components/layout/RightSidebar.tsx
-import { followUser, feed } from '@/hooks/useSocialMesh'; // we'll pass these as props
-
 export function RightSidebar({ feed, followUser }: { feed: any[]; followUser: (id: string) => void }) {
   return (
     <aside className="hidden lg:block w-72 flex-shrink-0">
