@@ -302,7 +302,7 @@ export default function Home() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // --- Helper to get like count (dummy for now) ---
+  // --- Helper for like count (dummy for now) ---
   const getLikeCount = (activityId: string): number => {
     const allContent = getAllContent();
     return Object.keys(allContent).filter(id => {
@@ -311,25 +311,25 @@ export default function Home() {
     }).length;
   };
 
-  // --- Render functions with new UI ---
+  // --- Render functions with refined UI ---
 
   function renderFeed() {
     return (
       <div className="space-y-6">
-        {/* Create Post Card – Facebook style */}
-        <div className="bg-white rounded-2xl shadow-md p-4 border border-gray-200">
+        {/* Create Post Card */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
           <div className="flex items-start gap-3">
-            <div className="w-11 h-11 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+            <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm">
               {userId?.slice(0,2).toUpperCase()}
             </div>
             <div className="flex-1">
               <textarea
-                className="w-full border-0 focus:ring-0 resize-none text-gray-700 placeholder-gray-400 bg-gray-100 rounded-full px-5 py-2.5 text-sm"
+                className="w-full border-0 focus:ring-0 resize-none text-gray-700 placeholder-gray-400 bg-gray-100 rounded-full px-5 py-3 text-sm"
                 rows={1}
                 placeholder="What's on your mind?"
                 value={postText}
                 onChange={(e) => setPostText(e.target.value)}
-                style={{ minHeight: '48px' }}
+                style={{ minHeight: '50px' }}
               />
               <div className="flex justify-end mt-2 gap-2">
                 <button className="text-gray-500 hover:bg-gray-100 p-2 rounded-full transition text-sm flex items-center gap-1">
@@ -340,7 +340,7 @@ export default function Home() {
                 </button>
                 <button
                   onClick={createPost}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-1.5 rounded-full text-sm font-semibold transition"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-1.5 rounded-full text-sm font-semibold transition"
                 >
                   Post
                 </button>
@@ -351,7 +351,7 @@ export default function Home() {
 
         {/* Feed Posts */}
         {feed.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-md p-10 text-center text-gray-500 border border-gray-200">
+          <div className="bg-white rounded-2xl shadow-sm p-10 text-center text-gray-500 border border-gray-200">
             No posts yet. Follow someone or create one!
           </div>
         ) : (
@@ -360,11 +360,11 @@ export default function Home() {
             const isFollowing = following.includes(activity.author_id);
             const likes = getLikeCount(activity.activity_id);
             return (
-              <div key={activity.activity_id} className="bg-white rounded-2xl shadow-md overflow-hidden border border-gray-200">
+              <div key={activity.activity_id} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-200">
                 <div className="p-5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
+                      <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm shadow-sm">
                         {activity.author_id.slice(0,2).toUpperCase()}
                       </div>
                       <div>
@@ -424,11 +424,11 @@ export default function Home() {
 
   function renderProfile() {
     return (
-      <div className="bg-white rounded-2xl shadow-md overflow-hidden border border-gray-200">
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-200">
         {/* Cover Photo */}
-        <div className="h-32 bg-gradient-to-r from-blue-400 to-indigo-500 relative">
-          <div className="absolute -bottom-10 left-6">
-            <div className="w-24 h-24 rounded-full bg-white p-1 shadow-lg">
+        <div className="h-40 bg-gradient-to-r from-blue-400 to-indigo-500 relative">
+          <div className="absolute -bottom-12 left-6">
+            <div className="w-28 h-28 rounded-full bg-white p-1 shadow-lg">
               <div className="w-full h-full rounded-full bg-blue-500 flex items-center justify-center text-white text-3xl font-bold">
                 {userId?.slice(0,2).toUpperCase()}
               </div>
@@ -436,10 +436,10 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="pt-14 pb-6 px-6">
+        <div className="pt-16 pb-6 px-6">
           <div className="flex justify-between items-start">
             <div>
-              <h2 className="text-xl font-bold text-gray-800">{myProfile?.name || 'Your Name'}</h2>
+              <h2 className="text-2xl font-bold text-gray-800">{myProfile?.name || 'Your Name'}</h2>
               <p className="text-sm text-gray-500">{myProfile?.bio || 'Add a bio...'}</p>
               <p className="text-xs text-gray-400 mt-1">User ID: {userId?.slice(0,10)}</p>
             </div>
@@ -498,7 +498,7 @@ export default function Home() {
 
   function renderMessages() {
     return (
-      <div className="bg-white rounded-2xl shadow-md overflow-hidden border border-gray-200 h-[600px] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-200 h-[600px] flex flex-col">
         <div className="p-4 border-b border-gray-200 flex items-center justify-between">
           <h2 className="text-lg font-bold text-gray-800">Messages</h2>
           <div className="flex gap-2">
@@ -705,12 +705,12 @@ export default function Home() {
             {activeTab === 'messages' && renderMessages()}
           </main>
 
-          {/* Right Sidebar – Suggested & Trending */}
+          {/* Right Sidebar – Who to follow & Today's news */}
           <aside className="hidden lg:block w-72 flex-shrink-0">
             <div className="sticky top-20 space-y-4">
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
-                <h3 className="font-semibold text-gray-700 mb-3">Suggested for you</h3>
-                {feed.slice(0, 3).map((activity) => (
+                <h3 className="font-semibold text-gray-700 mb-3">Who to follow</h3>
+                {feed.slice(0, 4).map((activity) => (
                   <div key={activity.author_id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs">
@@ -730,12 +730,12 @@ export default function Home() {
               </div>
 
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
-                <h3 className="font-semibold text-gray-700 mb-3">Trending now</h3>
+                <h3 className="font-semibold text-gray-700 mb-3">Today's news</h3>
                 <div className="space-y-2">
-                  <div className="text-sm">#decentralized</div>
-                  <div className="text-sm">#p2p</div>
-                  <div className="text-sm">#socialmesh</div>
-                  <div className="text-sm">#web3</div>
+                  <div className="text-sm text-gray-600">🔹 Ten questions you should answer truthfully</div>
+                  <div className="text-sm text-gray-600">🔹 Five unbelievable facts about money</div>
+                  <div className="text-sm text-gray-600">🔹 Best Pinterest Boards for learning about business</div>
+                  <div className="text-sm text-gray-600">🔹 Skills that you can learn from business</div>
                 </div>
               </div>
             </div>
