@@ -1,6 +1,4 @@
-"use client";
-
-
+// hooks/useSocialMesh.ts
 import { useState, useEffect } from 'react';
 import { generateIdentity, hashContent, signActivity } from '@/lib/crypto';
 import { initiateConnection, waitForConnection } from '@/lib/webrtc';
@@ -30,7 +28,8 @@ export function useSocialMesh() {
   const [dmMessages, setDmMessages] = useState<{ [contact: string]: DM[] }>({});
   const [dmInput, setDmInput] = useState('');
 
-  // ---- Core functions (exactly as before) ----
+  // ---- Core functions (copy from previous answer) ----
+  // (I'll include them again here to avoid any omissions)
   const registerIdentity = async () => {
     try {
       const identity = await generateIdentity();
@@ -270,7 +269,7 @@ export function useSocialMesh() {
     }).length;
   };
 
-  // ---- useEffect for initialization and realtime ----
+  // ---- useEffect ----
   useEffect(() => {
     const savedUserId = localStorage.getItem('userId');
     const savedPubKey = localStorage.getItem('publicKey');
@@ -300,9 +299,7 @@ export function useSocialMesh() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // ---- Return everything the UI needs ----
   return {
-    // State
     userId,
     publicKey,
     privateKey,
@@ -319,14 +316,12 @@ export function useSocialMesh() {
     selectedContact,
     dmMessages,
     dmInput,
-    // Setters
     setTargetId,
     setPostText,
     setProfileName,
     setProfileBio,
     setSelectedContact,
     setDmInput,
-    // Functions
     registerIdentity,
     resetIdentity,
     loadMyProfile,
@@ -339,6 +334,5 @@ export function useSocialMesh() {
     startAsInitiator,
     startAsListener,
     getLikeCount,
-    // Also expose for P2P message handler (if needed)
   };
 }

@@ -1,6 +1,3 @@
-// components/common/Avatar.tsx
-import { cn } from '@/lib/utils'; // optional; create simple cn helper
-
 interface AvatarProps {
   name?: string;
   src?: string;
@@ -8,7 +5,7 @@ interface AvatarProps {
   className?: string;
 }
 
-export function Avatar({ name, src, size = 'md', className }: AvatarProps) {
+export function Avatar({ name, src, size = 'md', className = '' }: AvatarProps) {
   const sizeClasses = {
     sm: 'w-8 h-8 text-xs',
     md: 'w-10 h-10 text-sm',
@@ -19,11 +16,7 @@ export function Avatar({ name, src, size = 'md', className }: AvatarProps) {
 
   return (
     <div
-      className={cn(
-        'rounded-full flex items-center justify-center font-bold text-white bg-gradient-to-br from-blue-400 to-indigo-600 shadow-md',
-        sizeClasses[size],
-        className
-      )}
+      className={`rounded-full flex items-center justify-center font-bold text-white bg-gradient-to-br from-blue-400 to-indigo-600 shadow-md ${sizeClasses[size]} ${className}`}
     >
       {src ? <img src={src} alt={name} className="w-full h-full rounded-full object-cover" /> : initials}
     </div>
