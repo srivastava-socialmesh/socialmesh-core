@@ -33,6 +33,7 @@ export function useSocialMesh() {
   // Friends
   const [friends, setFriends] = useState<string[]>([]);
   const [friendRequests, setFriendRequests] = useState<Activity[]>([]);
+  const [sentRequests, setSentRequests] = useState<Activity[]>([]);
 
   // ---- Helper functions (hoisted) ----
 
@@ -58,7 +59,6 @@ export function useSocialMesh() {
 
   async function loadMyProfile() {
     if (!userId) return;
-    // 1. Try local storage first
     const allContent = getAllContent();
     const profileId = Object.keys(allContent).find(id => {
       const c = allContent[id];
@@ -72,7 +72,6 @@ export function useSocialMesh() {
       setProfileAvatar(content.avatarHash || '');
       return;
     }
-    // 2. Fallback to API
     const res = await fetch(`/api/feed?userId=${userId}`);
     const data = await res.json();
     const profileActivity = data.activities?.find((a: any) => a.activity_type === 'PROFILE' && a.author_id === userId);
@@ -98,7 +97,6 @@ export function useSocialMesh() {
         activities = activities.filter((a: any) => following.includes(a.author_id));
       }
       setFeed(activities);
-      console.log('Feed loaded:', activities.length, 'posts');
     } catch (e) {
       console.error('Failed to load feed:', e);
     }
@@ -112,6 +110,26 @@ export function useSocialMesh() {
       a.activity_type === 'FRIEND_REQUEST' && a.parent_id === userId
     ) || [];
     setFriendRequests(requests);
+  }
+
+  async function loadSentRequests() {
+    if (!userId) return;
+    const res = await fetch(`/api/feed?userId=${userId}`);
+    const data = await res.json();
+    const sent = data.activities?.filter((a: any) => 
+      a.activity_type === 'FRIEND_REQUEST' && a.author_id === userId
+    ) || [];
+    setSentRequests(sent);
+  }
+
+  function isFriendOrPending(targetUserId: string): 'friend' | 'pending' | 'none' {
+    if (friends.includes(targetUserId)) return 'friend';
+    const allContent = getAllContent();
+    const pending = Object.keys(allContent).some(id => {
+      const c = allContent[id];
+      return c.type === 'FRIEND_REQUEST' && c.sender === userId && c.target === targetUserId;
+    });
+    return pending ? 'pending' : 'none';
   }
 
   // ---- Core functions ----
@@ -137,6 +155,7 @@ export function useSocialMesh() {
       loadFeed();
       loadMyProfile();
       loadFriendRequests();
+      loadSentRequests();
     } catch (error) {
       console.error('Registration error:', error);
       alert('Registration failed. Check console.');
@@ -173,7 +192,6 @@ export function useSocialMesh() {
     });
     setMyProfile(content);
     if (avatarBase64) setProfileAvatar(avatarBase64);
-    // Also save in local storage for quick retrieval
     saveContent(`profile_${userId}`, content);
     alert('Profile saved!');
   }
@@ -242,7 +260,6 @@ export function useSocialMesh() {
   }
 
   function handleP2PMessage(data: string, sendFn: (msg: string) => void) {
-    console.log('P2P message received:', data);
     try {
       const msg = JSON.parse(data);
       switch (msg.type) {
@@ -295,7 +312,6 @@ export function useSocialMesh() {
           break;
         }
         case 'new_like': {
-          console.log('Received new_like via P2P:', msg);
           saveContent(msg.activityId, msg.content);
           loadFeed();
           break;
@@ -328,7 +344,6 @@ export function useSocialMesh() {
 
   // ---- Like functionality ----
   async function likePost(postId: string, authorId: string) {
-    console.log('likePost called for post:', postId);
     if (!userId || !privateKey) {
       alert('Register first');
       return;
@@ -346,7 +361,6 @@ export function useSocialMesh() {
     const contentHash = await hashContent(content);
     const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
     const signature = await signActivity(privateKey, activityId, contentHash);
-    console.log('Saving like locally:', activityId);
     saveContent(activityId, { ...content, parentId: postId });
     const res = await fetch('/api/activity', {
       method: 'POST',
@@ -362,14 +376,12 @@ export function useSocialMesh() {
       })
     });
     const data = await res.json();
-    console.log('Server response for like:', data);
     if (!res.ok) {
       console.error('Server error on like:', data);
       alert('Failed to like: ' + (data.error || 'Unknown error'));
       return;
     }
     if (sendP2P) {
-      console.log('Broadcasting like via P2P');
       sendP2P(JSON.stringify({ type: 'new_like', activityId, content, signature }));
     }
     setTick(prev => prev + 1);
@@ -423,6 +435,7 @@ export function useSocialMesh() {
     });
     alert('Friend request sent!');
     loadFriendRequests();
+    loadSentRequests();
   }
 
   async function acceptFriendRequest(requestId: string, senderId: string) {
@@ -448,6 +461,7 @@ export function useSocialMesh() {
     const newFriends = [...friends, senderId];
     saveFriends(newFriends);
     loadFriendRequests();
+    loadSentRequests();
     alert('Friend request accepted!');
   }
 
@@ -465,6 +479,7 @@ export function useSocialMesh() {
       loadFeed();
       loadMyProfile();
       loadFriendRequests();
+      loadSentRequests();
     } else {
       localStorage.removeItem('userId');
       localStorage.removeItem('publicKey');
@@ -483,6 +498,7 @@ export function useSocialMesh() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activities' }, () => {
         loadFeed();
         loadFriendRequests();
+        loadSentRequests();
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -518,6 +534,7 @@ export function useSocialMesh() {
     setSelectedContact,
     friends,
     friendRequests,
+    sentRequests,
     registerIdentity,
     resetIdentity,
     loadMyProfile,
@@ -536,5 +553,7 @@ export function useSocialMesh() {
     sendFriendRequest,
     acceptFriendRequest,
     loadFriendRequests,
+    loadSentRequests,
+    isFriendOrPending,
   };
 }

@@ -11,8 +11,10 @@ interface FeedCardProps {
   isFollowing: boolean;
   likes: number;
   hasLiked: boolean;
+  friendStatus: 'friend' | 'pending' | 'none';
   onFollow: () => void;
   onLike: () => void;
+  onSendFriendRequest: () => void;
   onFetchP2P?: () => void;
   sendP2P: ((msg: string) => void) | null;
 }
@@ -23,8 +25,10 @@ export function FeedCard({
   isFollowing,
   likes,
   hasLiked,
+  friendStatus,
   onFollow,
   onLike,
+  onSendFriendRequest,
   onFetchP2P,
   sendP2P,
 }: FeedCardProps) {
@@ -39,16 +43,29 @@ export function FeedCard({
               <p className="text-sm text-gray-400">{new Date(activity.created_at).toLocaleString()}</p>
             </div>
           </div>
-          <button
-            onClick={onFollow}
-            className={`text-sm px-4 py-1.5 rounded-full font-semibold transition ${
-              isFollowing
-                ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                : 'bg-blue-500 text-white hover:bg-blue-600'
-            }`}
-          >
-            {isFollowing ? 'Following' : 'Follow'}
-          </button>
+          <div className="flex gap-2">
+            {friendStatus === 'none' && (
+              <button
+                onClick={onSendFriendRequest}
+                className="text-xs bg-blue-500 text-white px-3 py-1 rounded-full hover:bg-blue-600"
+              >
+                Add Friend
+              </button>
+            )}
+            {friendStatus === 'pending' && (
+              <span className="text-xs text-yellow-500">Pending</span>
+            )}
+            <button
+              onClick={onFollow}
+              className={`text-sm px-4 py-1.5 rounded-full font-semibold transition ${
+                isFollowing
+                  ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  : 'bg-blue-500 text-white hover:bg-blue-600'
+              }`}
+            >
+              {isFollowing ? 'Following' : 'Follow'}
+            </button>
+          </div>
         </div>
 
         {content && content.media && (

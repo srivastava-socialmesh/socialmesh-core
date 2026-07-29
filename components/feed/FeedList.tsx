@@ -4,7 +4,7 @@ import { getContent } from '@/lib/storage';
 import { useEffect } from 'react';
 
 export function FeedList() {
-  const { feed, following, getLikeCount, followUser, sendP2P, likePost, hasLiked } = useSocialMesh();
+  const { feed, following, getLikeCount, followUser, sendP2P, likePost, hasLiked, isFriendOrPending, sendFriendRequest } = useSocialMesh();
 
   useEffect(() => {
     if (sendP2P) {
@@ -33,6 +33,7 @@ export function FeedList() {
         const isFollowing = following.includes(activity.author_id);
         const likes = getLikeCount(activity.activity_id);
         const liked = hasLiked(activity.activity_id);
+        const friendStatus = isFriendOrPending(activity.author_id);
         return (
           <FeedCard
             key={activity.activity_id}
@@ -41,8 +42,10 @@ export function FeedList() {
             isFollowing={isFollowing}
             likes={likes}
             hasLiked={liked}
+            friendStatus={friendStatus}
             onFollow={() => followUser(activity.author_id)}
             onLike={() => likePost(activity.activity_id, activity.author_id)}
+            onSendFriendRequest={() => sendFriendRequest(activity.author_id)}
             onFetchP2P={() => {
               if (sendP2P) {
                 sendP2P(JSON.stringify({ type: 'request_content', activityId: activity.activity_id }));
