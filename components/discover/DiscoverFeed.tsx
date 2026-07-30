@@ -6,43 +6,46 @@ export function DiscoverFeed() {
   const [news, setNews] = useState([]);
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [newsError, setNewsError] = useState<string | null>(null);
+  const [youtubeError, setYoutubeError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
+      setNewsError(null);
+      setYoutubeError(null);
+
       try {
         const [newsRes, youtubeRes] = await Promise.all([
           fetch('/api/news'),
           fetch('/api/youtube/trending'),
         ]);
+
         const newsData = await newsRes.json();
         const youtubeData = await youtubeRes.json();
-        // Check for errors from the API
+
+        console.log('📰 News API response:', newsData);
+        console.log('🎬 YouTube API response:', youtubeData);
+
+        // News
         if (newsData.error) {
-          setError(`News: ${newsData.error}`);
+          setNewsError(newsData.error);
+          setNews([]);
         } else {
           setNews(newsData.articles || []);
         }
+
+        // YouTube
         if (youtubeData.error) {
-          setError(prev => prev ? `${prev} | YouTube: ${youtubeData.error}` : `YouTube: ${youtubeData.error}`);
+          setYoutubeError(youtubeData.error);
+          setVideos([]);
         } else {
           setVideos(youtubeData.videos || []);
         }
-        // If both have errors, show combined message
-        if (newsData.error && youtubeData.error) {
-          setError('Content unavailable. Please check API keys.');
-        } else if (newsData.error || youtubeData.error) {
-          // One failed, but we still have data for the other
-          // We'll clear the error if at least one succeeded
-          if (newsData.error && !youtubeData.error) {
-            setError(null); // only news failed, but we have videos
-          } else if (!newsData.error && youtubeData.error) {
-            setError(null); // only youtube failed, but we have news
-          }
-        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load content');
+        const msg = err instanceof Error ? err.message : 'Network error';
+        setNewsError(msg);
+        setYoutubeError(msg);
       } finally {
         setLoading(false);
       }
@@ -54,57 +57,65 @@ export function DiscoverFeed() {
     return <div className="text-center text-gray-500 py-8">Loading trending content...</div>;
   }
 
-  if (error) {
-    return (
-      <div className="bg-white rounded-2xl shadow-lg p-8 text-center border border-gray-100">
-        <p className="text-red-500">{error}</p>
-        <p className="text-sm text-gray-500 mt-2">
-          To enable this feature, add your API keys to Vercel environment variables:
-          <br />
-          <code className="bg-gray-100 px-2 py-1 rounded">NEWS_API_KEY</code> and{' '}
-          <code className="bg-gray-100 px-2 py-1 rounded">YOUTUBE_API_KEY</code>
-          <br />
-          <a
-            href="https://newsapi.org/register"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-500 hover:underline"
-          >
-            Get a free NewsAPI key →
-          </a>
-          {' | '}
-          <a
-            href="https://developers.google.com/youtube/v3/getting-started"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-500 hover:underline"
-          >
-            Get a free YouTube Data API key →
-          </a>
-        </p>
-      </div>
-    );
-  }
+  const hasNews = news.length > 0;
+  const hasVideos = videos.length > 0;
 
-  if (news.length === 0 && videos.length === 0) {
-    return <div className="text-center text-gray-500 py-8">No content available at the moment.</div>;
+  if (!hasNews && !hasVideos && !newsError && !youtubeError) {
+    return <div className="text-center text-gray-500 py-8">No content available.</div>;
   }
 
   return (
     <div className="space-y-8">
-      {news.length > 0 && (
-        <section>
-          <h2 className="text-2xl font-bold mb-4">📰 Top News</h2>
+      {/* News Section */}
+      <section>
+        <h2 className="text-2xl font-bold mb-4">📰 Top News</h2>
+        {newsError ? (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600 text-sm">
+            ⚠️ {newsError}
+            {newsError.includes('API key') && (
+              <div className="mt-2">
+                <a
+                  href="https://newsapi.org/register"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-500 hover:underline"
+                >
+                  Get a free NewsAPI key →
+                </a>
+              </div>
+            )}
+          </div>
+        ) : hasNews ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {news.map((article: any, idx) => (
               <NewsCard key={idx} {...article} />
             ))}
           </div>
-        </section>
-      )}
-      {videos.length > 0 && (
-        <section>
-          <h2 className="text-2xl font-bold mb-4">🎬 Trending YouTube</h2>
+        ) : (
+          <p className="text-gray-500">No news articles found.</p>
+        )}
+      </section>
+
+      {/* YouTube Section */}
+      <section>
+        <h2 className="text-2xl font-bold mb-4">🎬 Trending YouTube</h2>
+        {youtubeError ? (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600 text-sm">
+            ⚠️ {youtubeError}
+            {youtubeError.includes('API key') && (
+              <div className="mt-2">
+                <a
+                  href="https://developers.google.com/youtube/v3/getting-started"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-500 hover:underline"
+                >
+                  Get a free YouTube Data API key →
+                </a>
+              </div>
+            )}
+          </div>
+        ) : hasVideos ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {videos.map((video: any) => (
               <YoutubeCard
@@ -118,8 +129,10 @@ export function DiscoverFeed() {
               />
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <p className="text-gray-500">No trending videos found.</p>
+        )}
+      </section>
     </div>
   );
 }
