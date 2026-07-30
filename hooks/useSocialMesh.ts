@@ -34,6 +34,7 @@ export function useSocialMesh() {
   const [friendRequests, setFriendRequests] = useState<Activity[]>([]);
   const [sentRequests, setSentRequests] = useState<Activity[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
+  const [defaultPeer, setDefaultPeer] = useState<string>('');
 
   // ---- Helper functions ----
   function loadFollowing() {
@@ -51,6 +52,14 @@ export function useSocialMesh() {
   function saveFriends(list: string[]) {
     setFriends(list);
     localStorage.setItem('friends', JSON.stringify(list));
+  }
+  function loadDefaultPeer() {
+    const saved = localStorage.getItem('defaultPeer');
+    if (saved) setDefaultPeer(saved);
+  }
+  function saveDefaultPeer(peerId: string) {
+    setDefaultPeer(peerId);
+    localStorage.setItem('defaultPeer', peerId);
   }
 
   async function loadMyProfile() {
@@ -192,6 +201,7 @@ export function useSocialMesh() {
       localStorage.setItem('privateKey', identity.privateKey);
       loadFollowing();
       loadFriends();
+      loadDefaultPeer();
       loadFeed();
       loadMyProfile();
       loadFriendRequests();
@@ -208,6 +218,7 @@ export function useSocialMesh() {
     localStorage.removeItem('privateKey');
     localStorage.removeItem('following');
     localStorage.removeItem('friends');
+    localStorage.removeItem('defaultPeer');
     setUserId(null);
     setFollowing([]);
     setFriends([]);
@@ -361,23 +372,42 @@ export function useSocialMesh() {
     }
   }
 
+  let isInitiatorCalling = false;
+  let isListenerCalling = false;
+
   async function startAsInitiator() {
+    if (isInitiatorCalling) return;
     if (!userId) return alert('Register first');
-    const { sendData } = await initiateConnection(userId, targetId, (data) => {
-      handleP2PMessage(data, sendData);
-    });
-    setSendP2P(() => sendData);
-    setConnected(true);
-    setTimeout(() => requestDMHistory(targetId), 1000);
+    isInitiatorCalling = true;
+    try {
+      const { sendData } = await initiateConnection(userId, targetId, (data) => {
+        handleP2PMessage(data, sendData);
+      });
+      setSendP2P(() => sendData);
+      setConnected(true);
+      setTimeout(() => requestDMHistory(targetId), 1000);
+    } catch (e) {
+      console.error('Initiate connection error:', e);
+    } finally {
+      isInitiatorCalling = false;
+    }
   }
 
   async function startAsListener() {
+    if (isListenerCalling) return;
     if (!userId) return alert('Register first');
-    const { sendData } = await waitForConnection(userId, (data) => {
-      handleP2PMessage(data, sendData);
-    });
-    setSendP2P(() => sendData);
-    setConnected(true);
+    isListenerCalling = true;
+    try {
+      const { sendData } = await waitForConnection(userId, (data) => {
+        handleP2PMessage(data, sendData);
+      });
+      setSendP2P(() => sendData);
+      setConnected(true);
+    } catch (e) {
+      console.error('Listen connection error:', e);
+    } finally {
+      isListenerCalling = false;
+    }
   }
 
   // ---- Like ----
@@ -483,10 +513,19 @@ export function useSocialMesh() {
       setPrivateKey(savedPrivKey);
       loadFollowing();
       loadFriends();
+      loadDefaultPeer();
       loadFeed();
       loadMyProfile();
       loadFriendRequests();
       loadSentRequests();
+      // Auto-listen and auto-connect to default peer
+      setTimeout(() => {
+        startAsListener();
+        if (defaultPeer) {
+          setTargetId(defaultPeer);
+          setTimeout(() => startAsInitiator(), 1500);
+        }
+      }, 1000);
     } else {
       localStorage.removeItem('userId');
       localStorage.removeItem('publicKey');
@@ -542,6 +581,8 @@ export function useSocialMesh() {
     friendRequests,
     sentRequests,
     profiles,
+    defaultPeer,
+    saveDefaultPeer,
     registerIdentity,
     resetIdentity,
     loadMyProfile,

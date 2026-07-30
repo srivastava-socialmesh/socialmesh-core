@@ -54,6 +54,8 @@ export default function Home() {
     sendFriendRequest,
     acceptFriendRequest,
     loadFriendRequests,
+    defaultPeer,
+    saveDefaultPeer,
   } = useSocialMesh();
 
   const [activeTab, setActiveTab] = useState<'feed' | 'profile' | 'messages' | 'friends'>('feed');
@@ -137,6 +139,8 @@ export default function Home() {
                 targetId={targetId}
                 setTargetId={setTargetId}
                 connected={connected}
+                defaultPeer={defaultPeer}
+                saveDefaultPeer={saveDefaultPeer}
               />
             )}
 

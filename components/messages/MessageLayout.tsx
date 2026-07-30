@@ -1,4 +1,3 @@
-// components/messages/MessageLayout.tsx
 import { Avatar } from '@/components/common';
 import { Send, Phone, Video } from 'lucide-react';
 
@@ -17,6 +16,8 @@ interface MessageLayoutProps {
   targetId: string;
   setTargetId: (id: string) => void;
   connected: boolean;
+  defaultPeer: string;
+  saveDefaultPeer: (peerId: string) => void;
 }
 
 export function MessageLayout({
@@ -34,12 +35,14 @@ export function MessageLayout({
   targetId,
   setTargetId,
   connected,
+  defaultPeer,
+  saveDefaultPeer,
 }: MessageLayoutProps) {
   return (
     <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 h-[650px] flex flex-col">
       <div className="p-5 border-b border-gray-200 flex items-center justify-between bg-gray-50">
         <h2 className="text-xl font-bold text-gray-800">Messages</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <input
             placeholder="Connect to peer ID"
             className="border border-gray-300 rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-blue-400 w-48"
@@ -48,8 +51,23 @@ export function MessageLayout({
           />
           <button onClick={startCall} className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-full text-sm font-semibold transition shadow">Call</button>
           <button onClick={startListen} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-full text-sm font-semibold transition shadow">Listen</button>
+          <button
+            onClick={() => {
+              if (targetId) {
+                saveDefaultPeer(targetId);
+                alert('Default peer set!');
+              }
+            }}
+            className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded-full text-sm font-semibold transition shadow"
+            title="Save current target as default peer"
+          >
+            ⭐
+          </button>
         </div>
         {connected && <span className="text-green-500 text-sm font-medium">● Connected</span>}
+        {defaultPeer && !connected && (
+          <span className="text-blue-500 text-xs">Default: {defaultPeer.slice(0,6)}</span>
+        )}
       </div>
 
       <div className="flex flex-1 overflow-hidden">
