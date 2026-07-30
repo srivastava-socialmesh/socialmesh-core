@@ -6,6 +6,7 @@ import { StoryCarousel, CreatePost, FeedList } from '@/components/feed';
 import { ProfileCard } from '@/components/profile';
 import { MessageLayout } from '@/components/messages';
 import { FriendsList } from '@/components/friends/FriendsList';
+import { DiscoverFeed } from '@/components/discover/DiscoverFeed';
 import { FloatingButton } from '@/components/common';
 import { useState } from 'react';
 
@@ -58,7 +59,7 @@ export default function Home() {
     saveDefaultPeer,
   } = useSocialMesh();
 
-  const [activeTab, setActiveTab] = useState<'feed' | 'profile' | 'messages' | 'friends'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'profile' | 'messages' | 'friends' | 'discover'>('feed');
 
   if (!userId) {
     return (
@@ -146,6 +147,10 @@ export default function Home() {
 
             {activeTab === 'friends' && (
               <FriendsList />
+            )}
+
+            {activeTab === 'discover' && (
+              <DiscoverFeed />
             )}
           </main>
 

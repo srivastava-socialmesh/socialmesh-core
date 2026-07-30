@@ -1,8 +1,8 @@
-import { Home, User, MessageCircle, Users } from 'lucide-react';
+import { Home, User, MessageCircle, Users, Compass } from 'lucide-react';
 
 interface LeftSidebarProps {
-  activeTab: 'feed' | 'profile' | 'messages' | 'friends';
-  setActiveTab: (tab: 'feed' | 'profile' | 'messages' | 'friends') => void;
+  activeTab: 'feed' | 'profile' | 'messages' | 'friends' | 'discover';
+  setActiveTab: (tab: 'feed' | 'profile' | 'messages' | 'friends' | 'discover') => void;
   connected: boolean;
   targetId: string;
 }
@@ -13,6 +13,7 @@ export function LeftSidebar({ activeTab, setActiveTab, connected, targetId }: Le
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'messages', label: 'Messages', icon: MessageCircle },
     { id: 'friends', label: 'Friends', icon: Users },
+    { id: 'discover', label: 'Discover', icon: Compass },
   ];
 
   return (
