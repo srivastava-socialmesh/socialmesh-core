@@ -12,7 +12,9 @@ export function FriendsList() {
     acceptFriendRequest,
     loadFriendRequests, 
     loadSentRequests, 
-    isFriendOrPending 
+    isFriendOrPending,
+    checkUserExists,
+    fetchUserProfile,
   } = useSocialMesh();
 
   const [searchUserId, setSearchUserId] = useState('');
@@ -36,17 +38,22 @@ export function FriendsList() {
     if (!searchUserId.trim()) return;
     setLoading(true);
     setError(null);
+    setSearchResult(null);
     try {
-      const res = await fetch(`/api/feed?userId=${searchUserId}`);
-      const data = await res.json();
-      const profile = data.activities?.find((a: any) => 
-        a.activity_type === 'PROFILE' && a.author_id === searchUserId
-      );
+      // First check if user exists in identities table
+      const exists = await checkUserExists(searchUserId);
+      if (!exists) {
+        setError('User not found');
+        setLoading(false);
+        return;
+      }
+      // Try to fetch profile
+      const profile = await fetchUserProfile(searchUserId);
       if (profile) {
         setSearchResult({ userId: searchUserId, profile });
       } else {
-        setSearchResult(null);
-        setError('User not found or has no profile');
+        // User exists but has no profile
+        setSearchResult({ userId: searchUserId, profile: null });
       }
     } catch (e) {
       console.error(e);
@@ -89,8 +96,14 @@ export function FriendsList() {
       {searchResult && (
         <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg mb-4">
           <div className="flex items-center gap-3">
-            <Avatar name={searchResult.userId} size="sm" />
-            <span>{searchResult.userId.slice(0, 8)}</span>
+            <Avatar 
+              name={searchResult.userId} 
+              src={searchResult.profile?.avatarHash} 
+              size="sm" 
+            />
+            <span>
+              {searchResult.profile?.name || searchResult.userId.slice(0, 8)}
+            </span>
           </div>
           {status === 'friend' ? (
             <span className="text-green-500 font-semibold">Friend</span>

@@ -36,7 +36,7 @@ export function useSocialMesh() {
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [defaultPeer, setDefaultPeer] = useState<string>('');
 
-  // ---- Helper functions (unchanged) ----
+  // ---- Helper functions ----
   function loadFollowing() {
     const saved = localStorage.getItem('following');
     if (saved) setFollowing(JSON.parse(saved));
@@ -135,6 +135,25 @@ export function useSocialMesh() {
       console.error('Failed to fetch profile for', targetUserId, e);
     }
     return null;
+  }
+
+  async function checkUserExists(targetUserId: string): Promise<boolean> {
+    if (!targetUserId) return false;
+    try {
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const { data, error } = await supabase
+        .from('identities')
+        .select('user_id')
+        .eq('user_id', targetUserId)
+        .single();
+      return !!data;
+    } catch (e) {
+      console.error('Error checking user existence:', e);
+      return false;
+    }
   }
 
   async function loadFeed() {
@@ -375,7 +394,6 @@ export function useSocialMesh() {
   let isInitiatorCalling = false;
   let isListenerCalling = false;
 
-  // ---- FIX: Remove alert, just return if userId is null ----
   async function startAsInitiator() {
     if (!userId || isInitiatorCalling) return;
     isInitiatorCalling = true;
@@ -409,7 +427,7 @@ export function useSocialMesh() {
     }
   }
 
-  // ---- Like (unchanged) ----
+  // ---- Like ----
   async function likePost(postId: string, authorId: string) {
     if (!userId || !privateKey) { alert('Register first'); return; }
     const allContent = getAllContent();
@@ -457,7 +475,7 @@ export function useSocialMesh() {
     }).length;
   }
 
-  // ---- Friends (unchanged) ----
+  // ---- Friends ----
   async function sendFriendRequest(targetUserId: string) {
     if (!userId || !privateKey) return alert('Register first');
     if (friends.includes(targetUserId)) return alert('Already friends');
@@ -517,7 +535,6 @@ export function useSocialMesh() {
       loadMyProfile();
       loadFriendRequests();
       loadSentRequests();
-      // Auto-listen and auto-connect ONLY after userId is set
       setTimeout(() => {
         startAsListener();
         if (defaultPeer) {
@@ -586,6 +603,7 @@ export function useSocialMesh() {
     resetIdentity,
     loadMyProfile,
     fetchUserProfile,
+    checkUserExists,
     saveProfile,
     loadFeed,
     createPost,
