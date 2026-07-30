@@ -14,6 +14,7 @@ export function FriendsList() {
     loadSentRequests, 
     isFriendOrPending,
     fetchUserProfile,
+    checkUserExists,
   } = useSocialMesh();
 
   const [searchUserId, setSearchUserId] = useState('');
@@ -38,23 +39,21 @@ export function FriendsList() {
     setLoading(true);
     setError(null);
     try {
-      // Try to fetch profile via fetchUserProfile (from hook)
+      // First, check if user exists in Supabase identities
+      const exists = await checkUserExists(searchUserId);
+      if (!exists) {
+        setSearchResult(null);
+        setError('User not found');
+        setLoading(false);
+        return;
+      }
+      // Try to get profile
       const profile = await fetchUserProfile(searchUserId);
       if (profile && profile.name) {
         setSearchResult({ userId: searchUserId, profile });
       } else {
-        // Fallback: try the feed API to check existence
-        const res = await fetch(`/api/feed?userId=${searchUserId}`);
-        const data = await res.json();
-        const profileActivity = data.activities?.find((a: any) => 
-          a.activity_type === 'PROFILE' && a.author_id === searchUserId
-        );
-        if (profileActivity) {
-          setSearchResult({ userId: searchUserId, profile: { name: 'User' } });
-        } else {
-          setSearchResult(null);
-          setError('User not found or has no profile');
-        }
+        // User exists but no profile – still allow friend request
+        setSearchResult({ userId: searchUserId, profile: { name: 'User' } });
       }
     } catch (e) {
       console.error(e);
@@ -90,8 +89,9 @@ export function FriendsList() {
         <button
           onClick={handleSearch}
           className="bg-blue-500 text-white px-4 py-2 rounded-full text-sm"
+          disabled={loading}
         >
-          Search
+          {loading ? 'Searching...' : 'Search'}
         </button>
       </div>
       {searchResult && (

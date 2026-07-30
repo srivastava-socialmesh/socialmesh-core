@@ -36,7 +36,7 @@ export function useSocialMesh() {
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [defaultPeer, setDefaultPeer] = useState<string>('');
 
-  // ---- Helper functions (unchanged) ----
+  // ---- Helper functions ----
   function loadFollowing() {
     const saved = localStorage.getItem('following');
     if (saved) setFollowing(JSON.parse(saved));
@@ -135,6 +135,29 @@ export function useSocialMesh() {
       console.error('Failed to fetch profile for', targetUserId, e);
     }
     return null;
+  }
+
+  // ---- NEW: Check if a user exists in identities table ----
+  async function checkUserExists(targetUserId: string): Promise<boolean> {
+    try {
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const { data, error } = await supabase
+        .from('identities')
+        .select('user_id')
+        .eq('user_id', targetUserId)
+        .single();
+      if (error) {
+        console.error('Supabase error checking user:', error);
+        return false;
+      }
+      return !!data;
+    } catch (e) {
+      console.error('Error checking user existence:', e);
+      return false;
+    }
   }
 
   async function loadFeed() {
@@ -289,17 +312,36 @@ export function useSocialMesh() {
     loadFeed();
   }
 
+  // ---- Direct Messages ----
   async function sendDM(receiver: string, text: string) {
-    if (!userId || !privateKey) return alert('Register first');
+    if (!userId || !privateKey) {
+      alert('Register first');
+      return;
+    }
     if (!text.trim()) return;
-    if (!sendP2P) return alert('P2P not connected');
+    if (!sendP2P) {
+      alert('P2P not connected. Please establish a connection first.');
+      return;
+    }
     const content: DM = { text, sender: userId, receiver, timestamp: Date.now() };
     const contentHash = await hashContent(content);
     const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
     const signature = await signActivity(privateKey, activityId, contentHash);
+    // Save locally
     saveContent(activityId, content);
-    sendP2P(JSON.stringify({ type: 'dm_message', activityId, content, signature }));
-    setDmMessages(prev => ({ ...prev, [receiver]: [...(prev[receiver] || []), content] }));
+    // Add to local messages state
+    setDmMessages(prev => {
+      const existing = prev[receiver] || [];
+      return { ...prev, [receiver]: [...existing, content] };
+    });
+    // Send via P2P
+    try {
+      sendP2P(JSON.stringify({ type: 'dm_message', activityId, content, signature }));
+      console.log('DM sent via P2P to', receiver);
+    } catch (e) {
+      console.error('Failed to send DM via P2P:', e);
+      alert('Failed to send message. Please check P2P connection.');
+    }
     setDmInput('');
   }
 
@@ -311,6 +353,7 @@ export function useSocialMesh() {
   function handleP2PMessage(data: string, sendFn: (msg: string) => void) {
     try {
       const msg = JSON.parse(data);
+      console.log('P2P message received:', msg.type);
       switch (msg.type) {
         case 'request_content': {
           const content = getContent(msg.activityId);
@@ -333,9 +376,14 @@ export function useSocialMesh() {
           break;
         }
         case 'dm_message': {
+          // Save the message locally
           saveContent(msg.activityId, msg.content);
           const contact = msg.content.sender;
-          setDmMessages(prev => ({ ...prev, [contact]: [...(prev[contact] || []), msg.content] }));
+          setDmMessages(prev => {
+            const existing = prev[contact] || [];
+            return { ...prev, [contact]: [...existing, msg.content] };
+          });
+          // Add to contacts if not already
           if (!dmContacts.includes(contact)) {
             setDmContacts(prev => [...prev, contact]);
           }
@@ -357,8 +405,15 @@ export function useSocialMesh() {
             const id = `dm_${dm.sender}_${dm.receiver}_${dm.timestamp}`;
             saveContent(id, dm);
             const contact = dm.sender === userId ? dm.receiver : dm.sender;
-            setDmMessages(prev => ({ ...prev, [contact]: [...(prev[contact] || []), dm] }));
-            if (!dmContacts.includes(contact)) setDmContacts(prev => [...prev, contact]);
+            setDmMessages(prev => {
+              const existing = prev[contact] || [];
+              // Avoid duplicates
+              if (existing.find(m => m.timestamp === dm.timestamp && m.sender === dm.sender)) return prev;
+              return { ...prev, [contact]: [...existing, dm] };
+            });
+            if (!dmContacts.includes(contact)) {
+              setDmContacts(prev => [...prev, contact]);
+            }
           });
           break;
         }
@@ -607,6 +662,7 @@ export function useSocialMesh() {
     resetIdentity,
     loadMyProfile,
     fetchUserProfile,
+    checkUserExists,
     saveProfile,
     loadFeed,
     createPost,

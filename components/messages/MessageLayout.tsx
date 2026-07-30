@@ -38,6 +38,11 @@ export function MessageLayout({
   defaultPeer,
   saveDefaultPeer,
 }: MessageLayoutProps) {
+
+  const handleCall = () => {
+    alert('Audio/Video calls are coming soon! Stay tuned.');
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 h-[650px] flex flex-col">
       <div className="p-5 border-b border-gray-200 flex items-center justify-between bg-gray-50">
@@ -111,8 +116,8 @@ export function MessageLayout({
                 <Avatar name={selectedContact} size="md" />
                 {selectedContact.slice(0, 8)}
                 <div className="ml-auto flex gap-2">
-                  <button className="p-2 rounded-full hover:bg-gray-200 transition"><Phone className="w-4 h-4" /></button>
-                  <button className="p-2 rounded-full hover:bg-gray-200 transition"><Video className="w-4 h-4" /></button>
+                  <button onClick={handleCall} className="p-2 rounded-full hover:bg-gray-200 transition"><Phone className="w-4 h-4" /></button>
+                  <button onClick={handleCall} className="p-2 rounded-full hover:bg-gray-200 transition"><Video className="w-4 h-4" /></button>
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
