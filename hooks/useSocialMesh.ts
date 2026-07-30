@@ -15,7 +15,7 @@ export function useSocialMesh() {
   const [publicKey, setPublicKey] = useState<string>('');
   const [privateKey, setPrivateKey] = useState<string>('');
   const [following, setFollowing] = useState<string[]>([]);
-  const [targetId, setTargetId] = useState('');
+  const [targetId, setTargetId] = useState<string>(''); // full UUID
   const [connected, setConnected] = useState(false);
   const [sendP2P, setSendP2P] = useState<((msg: string) => void) | null>(null);
   const [feed, setFeed] = useState<Activity[]>([]);
@@ -34,7 +34,7 @@ export function useSocialMesh() {
   const [friendRequests, setFriendRequests] = useState<Activity[]>([]);
   const [sentRequests, setSentRequests] = useState<Activity[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
-  const [defaultPeer, setDefaultPeer] = useState<string>('');
+  const [defaultPeer, setDefaultPeer] = useState<string>(''); // full UUID
 
   // ---- Helper functions ----
   function loadFollowing() {
@@ -137,26 +137,33 @@ export function useSocialMesh() {
     return null;
   }
 
-  // ---- NEW: Check if a user exists in identities table ----
-  async function checkUserExists(targetUserId: string): Promise<boolean> {
+  // Check user existence by full or partial UUID
+  async function checkUserExists(identifier: string): Promise<string | null> {
     try {
       const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       );
-      const { data, error } = await supabase
-        .from('identities')
-        .select('user_id')
-        .eq('user_id', targetUserId)
-        .single();
+      // If it looks like a full UUID (36 chars with hyphens), search exact
+      let query = supabase.from('identities').select('user_id');
+      if (identifier.length === 36 && identifier.includes('-')) {
+        query = query.eq('user_id', identifier);
+      } else {
+        // Partial match: use ilike with % (starts with)
+        query = query.ilike('user_id', `${identifier}%`);
+      }
+      const { data, error } = await query.limit(1);
       if (error) {
         console.error('Supabase error checking user:', error);
-        return false;
+        return null;
       }
-      return !!data;
+      if (data && data.length > 0) {
+        return data[0].user_id; // return the full UUID
+      }
+      return null;
     } catch (e) {
       console.error('Error checking user existence:', e);
-      return false;
+      return null;
     }
   }
 
@@ -434,6 +441,11 @@ export function useSocialMesh() {
 
   async function startAsInitiator() {
     if (!userId || isInitiatorCalling) return;
+    // Ensure targetId is a full UUID (at least 36 chars)
+    if (!targetId || targetId.length < 30) {
+      console.warn('Invalid targetId, must be full UUID');
+      return;
+    }
     isInitiatorCalling = true;
     try {
       const { sendData } = await initiateConnection(userId, targetId, (data) => {
@@ -593,10 +605,12 @@ export function useSocialMesh() {
       loadMyProfile();
       loadFriendRequests();
       loadSentRequests();
+      // Auto-listen and try to connect to default peer
       setTimeout(() => {
         startAsListener();
         if (defaultPeer) {
           setTargetId(defaultPeer);
+          // Wait a bit then initiate
           setTimeout(() => startAsInitiator(), 1500);
         }
       }, 1000);

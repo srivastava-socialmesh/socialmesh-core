@@ -17,7 +17,7 @@ export function FriendsList() {
     checkUserExists,
   } = useSocialMesh();
 
-  const [searchUserId, setSearchUserId] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [searchResult, setSearchResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,25 +35,25 @@ export function FriendsList() {
   }, [userId]);
 
   const handleSearch = async () => {
-    if (!searchUserId.trim()) return;
+    if (!searchInput.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      // First, check if user exists in Supabase identities
-      const exists = await checkUserExists(searchUserId);
-      if (!exists) {
+      // checkUserExists returns full UUID or null
+      const fullId = await checkUserExists(searchInput);
+      if (!fullId) {
         setSearchResult(null);
         setError('User not found');
         setLoading(false);
         return;
       }
       // Try to get profile
-      const profile = await fetchUserProfile(searchUserId);
+      const profile = await fetchUserProfile(fullId);
       if (profile && profile.name) {
-        setSearchResult({ userId: searchUserId, profile });
+        setSearchResult({ userId: fullId, profile });
       } else {
         // User exists but no profile – still allow friend request
-        setSearchResult({ userId: searchUserId, profile: { name: 'User' } });
+        setSearchResult({ userId: fullId, profile: { name: 'User' } });
       }
     } catch (e) {
       console.error(e);
@@ -81,10 +81,10 @@ export function FriendsList() {
       <div className="flex gap-2 mb-4">
         <input
           type="text"
-          placeholder="Enter User ID to find"
+          placeholder="Enter full or partial User ID"
           className="flex-1 border border-gray-300 rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-blue-400"
-          value={searchUserId}
-          onChange={(e) => setSearchUserId(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
         />
         <button
           onClick={handleSearch}

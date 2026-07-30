@@ -49,8 +49,8 @@ export function MessageLayout({
         <h2 className="text-xl font-bold text-gray-800">Messages</h2>
         <div className="flex gap-2 items-center">
           <input
-            placeholder="Connect to peer ID"
-            className="border border-gray-300 rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-blue-400 w-48"
+            placeholder="Full peer ID (UUID)"
+            className="border border-gray-300 rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-blue-400 w-64"
             value={targetId}
             onChange={(e) => setTargetId(e.target.value)}
           />
@@ -58,9 +58,11 @@ export function MessageLayout({
           <button onClick={startListen} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-full text-sm font-semibold transition shadow">Listen</button>
           <button
             onClick={() => {
-              if (targetId) {
+              if (targetId && targetId.length >= 36) {
                 saveDefaultPeer(targetId);
                 alert('Default peer set!');
+              } else {
+                alert('Please enter a full UUID (36 chars)');
               }
             }}
             className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded-full text-sm font-semibold transition shadow"
