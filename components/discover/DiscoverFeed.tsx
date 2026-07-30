@@ -3,9 +3,22 @@ import { NewsCard } from './NewsCard';
 import { YoutubeCard } from './YoutubeCard';
 import { YoutubePlayer } from './YoutubePlayer';
 
+type VideoItem = {
+  id: string;
+  snippet: {
+    title: string;
+    description: string;
+    thumbnails: {
+      medium: { url: string };
+    };
+    channelTitle: string;
+    publishedAt: string;
+  };
+};
+
 export function DiscoverFeed() {
-  const [news, setNews] = useState([]);
-  const [videos, setVideos] = useState([]);
+  const [news, setNews] = useState<any[]>([]);
+  const [videos, setVideos] = useState<VideoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [newsError, setNewsError] = useState<string | null>(null);
   const [youtubeError, setYoutubeError] = useState<string | null>(null);
@@ -25,9 +38,6 @@ export function DiscoverFeed() {
 
         const newsData = await newsRes.json();
         const youtubeData = await youtubeRes.json();
-
-        console.log('📰 News API response:', newsData);
-        console.log('🎬 YouTube API response:', youtubeData);
 
         if (newsData.error) {
           setNewsError(newsData.error);
@@ -66,7 +76,6 @@ export function DiscoverFeed() {
 
   return (
     <div className="space-y-8">
-      {/* News Section */}
       <section>
         <h2 className="text-2xl font-bold mb-4">📰 Top News</h2>
         {newsError ? (
@@ -96,7 +105,6 @@ export function DiscoverFeed() {
         )}
       </section>
 
-      {/* YouTube Section */}
       <section>
         <h2 className="text-2xl font-bold mb-4">🎬 Trending YouTube</h2>
         {youtubeError ? (
@@ -117,7 +125,7 @@ export function DiscoverFeed() {
           </div>
         ) : hasVideos ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {videos.map((video: any) => (
+            {videos.map((video) => (
               <YoutubeCard
                 key={video.id}
                 id={video.id}
@@ -126,7 +134,7 @@ export function DiscoverFeed() {
                 thumbnail={video.snippet.thumbnails.medium.url}
                 channelTitle={video.snippet.channelTitle}
                 publishedAt={video.snippet.publishedAt}
-                onClick={(id: string) => setSelectedVideo(id)}
+                onClick={() => setSelectedVideo(video.id)}
               />
             ))}
           </div>
@@ -135,11 +143,10 @@ export function DiscoverFeed() {
         )}
       </section>
 
-      {/* Video Modal */}
       {selectedVideo && (
         <YoutubePlayer
           videoId={selectedVideo}
-          title={videos.find((v: any) => v.id === selectedVideo)?.snippet?.title || 'Video'}
+          title={videos.find((v) => v.id === selectedVideo)?.snippet?.title || 'Video'}
           onClose={() => setSelectedVideo(null)}
         />
       )}
