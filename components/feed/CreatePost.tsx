@@ -18,23 +18,24 @@ export function CreatePost({ userId, postText, setPostText, postMedia, setPostMe
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Check file size (max 2MB for images, 5MB for videos)
+    const maxSize = mediaType === 'image' ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert(`File too large. Max ${maxSize / (1024 * 1024)}MB for ${mediaType}s.`);
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
       setPostMedia({ type: mediaType, data: dataUrl });
     };
     reader.readAsDataURL(file);
-    // Clear input to allow re-selecting same file
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const removeMedia = () => {
     setPostMedia(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const handlePost = () => {
-    createPost(postText, postMedia);
   };
 
   return (
@@ -89,7 +90,7 @@ export function CreatePost({ userId, postText, setPostText, postMedia, setPostMe
               />
             </div>
             <button
-              onClick={handlePost}
+              onClick={() => createPost(postText, postMedia)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full text-sm font-semibold transition shadow-md"
             >
               Post
