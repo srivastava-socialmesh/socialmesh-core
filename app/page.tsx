@@ -1,12 +1,13 @@
 "use client";
 
 import { useSocialMesh } from '@/hooks/useSocialMesh';
-import { TopNavbar, LeftSidebar, RightSidebar } from '@/components/layout';
+import { TopNavbar } from '@/components/layout';
 import { StoryCarousel, CreatePost, FeedList } from '@/components/feed';
 import { ProfileCard } from '@/components/profile';
 import { MessageLayout } from '@/components/messages';
 import { FriendsList } from '@/components/friends/FriendsList';
-import { DiscoverFeed } from '@/components/discover/DiscoverFeed';
+import { NewsSidebar } from '@/components/layout/NewsSidebar';
+import { YoutubeSidebar } from '@/components/layout/YoutubeSidebar';
 import { FloatingButton } from '@/components/common';
 import { useState } from 'react';
 
@@ -59,7 +60,7 @@ export default function Home() {
     saveDefaultPeer,
   } = useSocialMesh();
 
-  const [activeTab, setActiveTab] = useState<'feed' | 'profile' | 'messages' | 'friends' | 'discover'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'profile' | 'messages' | 'friends'>('feed');
 
   if (!userId) {
     return (
@@ -83,79 +84,86 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <TopNavbar userId={userId} resetIdentity={resetIdentity} />
+      <TopNavbar
+        userId={userId}
+        resetIdentity={resetIdentity}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+      />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="flex flex-col md:flex-row gap-6">
-          <LeftSidebar
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            connected={connected}
+        {activeTab === 'feed' && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {/* Left: News Sidebar */}
+            <aside className="hidden md:block md:col-span-1">
+              <div className="sticky top-20 max-h-[calc(100vh-100px)] overflow-y-auto">
+                <NewsSidebar />
+              </div>
+            </aside>
+
+            {/* Center: Feed */}
+            <main className="md:col-span-2">
+              <StoryCarousel />
+              <div className="mt-6 space-y-6">
+                <CreatePost
+                  userId={userId}
+                  postText={postText}
+                  setPostText={setPostText}
+                  postMedia={postMedia}
+                  setPostMedia={setPostMedia}
+                  createPost={createPost}
+                />
+                <FeedList />
+              </div>
+            </main>
+
+            {/* Right: YouTube Sidebar */}
+            <aside className="hidden md:block md:col-span-1">
+              <div className="sticky top-20 max-h-[calc(100vh-100px)] overflow-y-auto">
+                <YoutubeSidebar />
+              </div>
+            </aside>
+          </div>
+        )}
+
+        {activeTab === 'profile' && (
+          <div className="max-w-3xl mx-auto">
+            <ProfileCard
+              userId={userId}
+              profile={myProfile}
+              onEdit={() => {}}
+              onSave={saveProfile}
+              followingCount={following.length}
+              postsCount={feed.length}
+              connectionsCount={dmContacts.length}
+            />
+          </div>
+        )}
+
+        {activeTab === 'messages' && (
+          <MessageLayout
+            contacts={dmContacts}
+            selectedContact={selectedContact}
+            messages={dmMessages}
+            userId={userId}
+            dmInput={dmInput}
+            setDmInput={setDmInput}
+            sendDM={sendDM}
+            requestDMHistory={requestDMHistory}
+            setSelectedContact={setSelectedContact}
+            startCall={startAsInitiator}
+            startListen={startAsListener}
             targetId={targetId}
+            setTargetId={setTargetId}
+            connected={connected}
+            defaultPeer={defaultPeer}
+            saveDefaultPeer={saveDefaultPeer}
           />
+        )}
 
-          <main className="flex-1 min-w-0">
-            {activeTab === 'feed' && (
-              <>
-                <StoryCarousel />
-                <div className="mt-6 space-y-6">
-                  <CreatePost
-                    userId={userId}
-                    postText={postText}
-                    setPostText={setPostText}
-                    postMedia={postMedia}
-                    setPostMedia={setPostMedia}
-                    createPost={createPost}
-                  />
-                  <FeedList />
-                </div>
-              </>
-            )}
-
-            {activeTab === 'profile' && (
-              <ProfileCard
-                userId={userId}
-                profile={myProfile}
-                onEdit={() => {}}
-                onSave={saveProfile}
-                followingCount={following.length}
-                postsCount={feed.length}
-                connectionsCount={dmContacts.length}
-              />
-            )}
-
-            {activeTab === 'messages' && (
-              <MessageLayout
-                contacts={dmContacts}
-                selectedContact={selectedContact}
-                messages={dmMessages}
-                userId={userId}
-                dmInput={dmInput}
-                setDmInput={setDmInput}
-                sendDM={sendDM}
-                requestDMHistory={requestDMHistory}
-                setSelectedContact={setSelectedContact}
-                startCall={startAsInitiator}
-                startListen={startAsListener}
-                targetId={targetId}
-                setTargetId={setTargetId}
-                connected={connected}
-                defaultPeer={defaultPeer}
-                saveDefaultPeer={saveDefaultPeer}
-              />
-            )}
-
-            {activeTab === 'friends' && (
-              <FriendsList />
-            )}
-
-            {activeTab === 'discover' && (
-              <DiscoverFeed />
-            )}
-          </main>
-
-          <RightSidebar feed={feed} followUser={followUser} />
-        </div>
+        {activeTab === 'friends' && (
+          <FriendsList />
+        )}
       </div>
 
       <FloatingButton />
