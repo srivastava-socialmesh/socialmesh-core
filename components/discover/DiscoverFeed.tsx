@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NewsCard } from './NewsCard';
 import { YoutubeCard } from './YoutubeCard';
+import { YoutubePlayer } from './YoutubePlayer';
 
 export function DiscoverFeed() {
   const [news, setNews] = useState([]);
@@ -8,6 +9,7 @@ export function DiscoverFeed() {
   const [loading, setLoading] = useState(true);
   const [newsError, setNewsError] = useState<string | null>(null);
   const [youtubeError, setYoutubeError] = useState<string | null>(null);
+  const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -27,7 +29,6 @@ export function DiscoverFeed() {
         console.log('📰 News API response:', newsData);
         console.log('🎬 YouTube API response:', youtubeData);
 
-        // News
         if (newsData.error) {
           setNewsError(newsData.error);
           setNews([]);
@@ -35,7 +36,6 @@ export function DiscoverFeed() {
           setNews(newsData.articles || []);
         }
 
-        // YouTube
         if (youtubeData.error) {
           setYoutubeError(youtubeData.error);
           setVideos([]);
@@ -126,6 +126,7 @@ export function DiscoverFeed() {
                 thumbnail={video.snippet.thumbnails.medium.url}
                 channelTitle={video.snippet.channelTitle}
                 publishedAt={video.snippet.publishedAt}
+                onClick={(id: string) => setSelectedVideo(id)}
               />
             ))}
           </div>
@@ -133,6 +134,15 @@ export function DiscoverFeed() {
           <p className="text-gray-500">No trending videos found.</p>
         )}
       </section>
+
+      {/* Video Modal */}
+      {selectedVideo && (
+        <YoutubePlayer
+          videoId={selectedVideo}
+          title={videos.find((v: any) => v.id === selectedVideo)?.snippet?.title || 'Video'}
+          onClose={() => setSelectedVideo(null)}
+        />
+      )}
     </div>
   );
 }
