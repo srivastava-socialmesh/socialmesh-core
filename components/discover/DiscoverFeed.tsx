@@ -134,7 +134,7 @@ export function DiscoverFeed() {
                 thumbnail={video.snippet.thumbnails.medium.url}
                 channelTitle={video.snippet.channelTitle}
                 publishedAt={video.snippet.publishedAt}
-                onClick={() => setSelectedVideo(video.id)}
+                onClick={(id: string) => setSelectedVideo(id)}
               />
             ))}
           </div>
