@@ -74,7 +74,7 @@ export function MessageLayout({
         <div className="w-1/3 border-r border-gray-200 overflow-y-auto bg-gray-50">
           <div className="p-4 font-bold text-gray-700 border-b border-gray-200">Contacts</div>
           {contacts.length === 0 ? (
-            <div className="p-6 text-gray-400 text-center">No contacts yet</div>
+            <div className="p-6 text-gray-400 text-center">No contacts yet<br/>Connect to a peer to start chatting</div>
           ) : (
             contacts.map((contact) => (
               <div
@@ -96,6 +96,9 @@ export function MessageLayout({
                       : 'No messages'}
                   </div>
                 </div>
+                {contact === targetId && connected && (
+                  <span className="text-green-500 text-xs">● Online</span>
+                )}
               </div>
             ))
           )}
@@ -148,7 +151,7 @@ export function MessageLayout({
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-400">
-              Select a contact to start chatting
+              {connected ? 'Select a contact to start chatting' : 'Connect to a peer to start messaging'}
             </div>
           )}
         </div>

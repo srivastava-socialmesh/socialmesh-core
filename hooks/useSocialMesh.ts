@@ -36,7 +36,7 @@ export function useSocialMesh() {
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [defaultPeer, setDefaultPeer] = useState<string>('');
 
-  // ---- Helper functions ----
+  // ---- Helper functions (unchanged) ----
   function loadFollowing() {
     const saved = localStorage.getItem('following');
     if (saved) setFollowing(JSON.parse(saved));
@@ -135,25 +135,6 @@ export function useSocialMesh() {
       console.error('Failed to fetch profile for', targetUserId, e);
     }
     return null;
-  }
-
-  async function checkUserExists(targetUserId: string): Promise<boolean> {
-    if (!targetUserId) return false;
-    try {
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-      const { data, error } = await supabase
-        .from('identities')
-        .select('user_id')
-        .eq('user_id', targetUserId)
-        .single();
-      return !!data;
-    } catch (e) {
-      console.error('Error checking user existence:', e);
-      return false;
-    }
   }
 
   async function loadFeed() {
@@ -355,7 +336,9 @@ export function useSocialMesh() {
           saveContent(msg.activityId, msg.content);
           const contact = msg.content.sender;
           setDmMessages(prev => ({ ...prev, [contact]: [...(prev[contact] || []), msg.content] }));
-          if (!dmContacts.includes(contact)) setDmContacts(prev => [...prev, contact]);
+          if (!dmContacts.includes(contact)) {
+            setDmContacts(prev => [...prev, contact]);
+          }
           break;
         }
         case 'request_dm_history': {
@@ -519,7 +502,27 @@ export function useSocialMesh() {
     alert('Friend request accepted!');
   }
 
-  // ---- useEffect ----
+  // ---- Add contact ----
+  function addContact(contactId: string) {
+    if (!contactId) return;
+    setDmContacts(prev => {
+      if (prev.includes(contactId)) return prev;
+      return [...prev, contactId];
+    });
+  }
+
+  // ---- Auto-add and select when connected ----
+  useEffect(() => {
+    if (connected && targetId) {
+      addContact(targetId);
+      if (!selectedContact) {
+        setSelectedContact(targetId);
+        requestDMHistory(targetId);
+      }
+    }
+  }, [connected, targetId]);
+
+  // ---- useEffect for initialization ----
   useEffect(() => {
     const savedUserId = localStorage.getItem('userId');
     const savedPubKey = localStorage.getItem('publicKey');
@@ -599,11 +602,11 @@ export function useSocialMesh() {
     profiles,
     defaultPeer,
     saveDefaultPeer,
+    addContact,
     registerIdentity,
     resetIdentity,
     loadMyProfile,
     fetchUserProfile,
-    checkUserExists,
     saveProfile,
     loadFeed,
     createPost,
