@@ -23,7 +23,7 @@ export function DiscoverFeed() {
         setNews(newsData);
         setVideos(youtubeData);
       } catch (err) {
-        setError(err.message || 'Failed to load content');
+        setError(err instanceof Error ? err.message : 'Failed to load content');
       } finally {
         setLoading(false);
       }
