@@ -12,6 +12,9 @@ export function YoutubeCard({ id, title, description, thumbnail, channelTitle, p
   return (
     <div
       onClick={() => onClick(id)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && onClick(id)}
       className="cursor-pointer bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 transition hover:shadow-xl"
     >
       <div className="relative">
