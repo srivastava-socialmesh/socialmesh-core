@@ -24,11 +24,17 @@ export function CreatePost({ userId, postText, setPostText, postMedia, setPostMe
       setPostMedia({ type: mediaType, data: dataUrl });
     };
     reader.readAsDataURL(file);
+    // Clear input to allow re-selecting same file
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const removeMedia = () => {
     setPostMedia(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handlePost = () => {
+    createPost(postText, postMedia);
   };
 
   return (
@@ -83,7 +89,7 @@ export function CreatePost({ userId, postText, setPostText, postMedia, setPostMe
               />
             </div>
             <button
-              onClick={() => createPost(postText, postMedia)}
+              onClick={handlePost}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full text-sm font-semibold transition shadow-md"
             >
               Post
