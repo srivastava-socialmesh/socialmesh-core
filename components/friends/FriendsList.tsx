@@ -39,7 +39,6 @@ export function FriendsList() {
     setLoading(true);
     setError(null);
     try {
-      // checkUserExists returns full UUID or null
       const fullId = await checkUserExists(searchInput);
       if (!fullId) {
         setSearchResult(null);
@@ -47,12 +46,10 @@ export function FriendsList() {
         setLoading(false);
         return;
       }
-      // Try to get profile
       const profile = await fetchUserProfile(fullId);
       if (profile && profile.name) {
         setSearchResult({ userId: fullId, profile });
       } else {
-        // User exists but no profile – still allow friend request
         setSearchResult({ userId: fullId, profile: { name: 'User' } });
       }
     } catch (e) {

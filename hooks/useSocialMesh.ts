@@ -15,7 +15,7 @@ export function useSocialMesh() {
   const [publicKey, setPublicKey] = useState<string>('');
   const [privateKey, setPrivateKey] = useState<string>('');
   const [following, setFollowing] = useState<string[]>([]);
-  const [targetId, setTargetId] = useState<string>(''); // full UUID
+  const [targetId, setTargetId] = useState<string>('');
   const [connected, setConnected] = useState(false);
   const [sendP2P, setSendP2P] = useState<((msg: string) => void) | null>(null);
   const [feed, setFeed] = useState<Activity[]>([]);
@@ -34,7 +34,7 @@ export function useSocialMesh() {
   const [friendRequests, setFriendRequests] = useState<Activity[]>([]);
   const [sentRequests, setSentRequests] = useState<Activity[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
-  const [defaultPeer, setDefaultPeer] = useState<string>(''); // full UUID
+  const [defaultPeer, setDefaultPeer] = useState<string>('');
 
   // ---- Helper functions ----
   function loadFollowing() {
@@ -137,19 +137,16 @@ export function useSocialMesh() {
     return null;
   }
 
-  // Check user existence by full or partial UUID
   async function checkUserExists(identifier: string): Promise<string | null> {
     try {
       const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       );
-      // If it looks like a full UUID (36 chars with hyphens), search exact
       let query = supabase.from('identities').select('user_id');
       if (identifier.length === 36 && identifier.includes('-')) {
         query = query.eq('user_id', identifier);
       } else {
-        // Partial match: use ilike with % (starts with)
         query = query.ilike('user_id', `${identifier}%`);
       }
       const { data, error } = await query.limit(1);
@@ -158,7 +155,7 @@ export function useSocialMesh() {
         return null;
       }
       if (data && data.length > 0) {
-        return data[0].user_id; // return the full UUID
+        return data[0].user_id;
       }
       return null;
     } catch (e) {
@@ -189,6 +186,7 @@ export function useSocialMesh() {
     const requests = data.activities?.filter((a: any) => 
       a.activity_type === 'FRIEND_REQUEST' && a.parent_id === userId
     ) || [];
+    console.log('📥 Incoming friend requests:', requests);
     setFriendRequests(requests);
   }
 
@@ -199,6 +197,7 @@ export function useSocialMesh() {
     const sent = data.activities?.filter((a: any) => 
       a.activity_type === 'FRIEND_REQUEST' && a.author_id === userId
     ) || [];
+    console.log('📤 Sent friend requests:', sent);
     setSentRequests(sent);
   }
 
@@ -334,14 +333,11 @@ export function useSocialMesh() {
     const contentHash = await hashContent(content);
     const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
     const signature = await signActivity(privateKey, activityId, contentHash);
-    // Save locally
     saveContent(activityId, content);
-    // Add to local messages state
     setDmMessages(prev => {
       const existing = prev[receiver] || [];
       return { ...prev, [receiver]: [...existing, content] };
     });
-    // Send via P2P
     try {
       sendP2P(JSON.stringify({ type: 'dm_message', activityId, content, signature }));
       console.log('DM sent via P2P to', receiver);
@@ -383,14 +379,12 @@ export function useSocialMesh() {
           break;
         }
         case 'dm_message': {
-          // Save the message locally
           saveContent(msg.activityId, msg.content);
           const contact = msg.content.sender;
           setDmMessages(prev => {
             const existing = prev[contact] || [];
             return { ...prev, [contact]: [...existing, msg.content] };
           });
-          // Add to contacts if not already
           if (!dmContacts.includes(contact)) {
             setDmContacts(prev => [...prev, contact]);
           }
@@ -414,7 +408,6 @@ export function useSocialMesh() {
             const contact = dm.sender === userId ? dm.receiver : dm.sender;
             setDmMessages(prev => {
               const existing = prev[contact] || [];
-              // Avoid duplicates
               if (existing.find(m => m.timestamp === dm.timestamp && m.sender === dm.sender)) return prev;
               return { ...prev, [contact]: [...existing, dm] };
             });
@@ -441,7 +434,6 @@ export function useSocialMesh() {
 
   async function startAsInitiator() {
     if (!userId || isInitiatorCalling) return;
-    // Ensure targetId is a full UUID (at least 36 chars)
     if (!targetId || targetId.length < 30) {
       console.warn('Invalid targetId, must be full UUID');
       return;
@@ -540,11 +532,26 @@ export function useSocialMesh() {
     const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
     const signature = await signActivity(privateKey, activityId, contentHash);
     saveContent(activityId, content);
-    await fetch('/api/activity', {
+    const res = await fetch('/api/activity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ activityId, type: 'FRIEND_REQUEST', parentId: targetUserId, rootId: null, contentHash, signature, userId })
+      body: JSON.stringify({
+        activityId,
+        type: 'FRIEND_REQUEST',
+        parentId: targetUserId,
+        rootId: null,
+        contentHash,
+        signature,
+        userId
+      })
     });
+    const data = await res.json();
+    console.log('📤 Friend request response:', data);
+    if (!res.ok) {
+      console.error('Failed to send friend request:', data);
+      alert('Failed to send: ' + (data.error || 'Unknown error'));
+      return;
+    }
     alert('Friend request sent!');
     loadFriendRequests();
     loadSentRequests();
@@ -557,11 +564,26 @@ export function useSocialMesh() {
     const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
     const signature = await signActivity(privateKey, activityId, contentHash);
     saveContent(activityId, content);
-    await fetch('/api/activity', {
+    const res = await fetch('/api/activity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ activityId, type: 'FRIEND_ACCEPT', parentId: requestId, rootId: null, contentHash, signature, userId })
+      body: JSON.stringify({
+        activityId,
+        type: 'FRIEND_ACCEPT',
+        parentId: requestId,
+        rootId: null,
+        contentHash,
+        signature,
+        userId
+      })
     });
+    const data = await res.json();
+    console.log('✅ Friend accept response:', data);
+    if (!res.ok) {
+      console.error('Failed to accept friend request:', data);
+      alert('Failed to accept: ' + (data.error || 'Unknown error'));
+      return;
+    }
     const newFriends = [...friends, senderId];
     saveFriends(newFriends);
     loadFriendRequests();
@@ -605,12 +627,10 @@ export function useSocialMesh() {
       loadMyProfile();
       loadFriendRequests();
       loadSentRequests();
-      // Auto-listen and try to connect to default peer
       setTimeout(() => {
         startAsListener();
         if (defaultPeer) {
           setTargetId(defaultPeer);
-          // Wait a bit then initiate
           setTimeout(() => startAsInitiator(), 1500);
         }
       }, 1000);
