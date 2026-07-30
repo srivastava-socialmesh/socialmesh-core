@@ -36,7 +36,7 @@ export function useSocialMesh() {
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [defaultPeer, setDefaultPeer] = useState<string>('');
 
-  // ---- Helper functions ----
+  // ---- Helper functions (unchanged) ----
   function loadFollowing() {
     const saved = localStorage.getItem('following');
     if (saved) setFollowing(JSON.parse(saved));
@@ -375,9 +375,9 @@ export function useSocialMesh() {
   let isInitiatorCalling = false;
   let isListenerCalling = false;
 
+  // ---- FIX: Remove alert, just return if userId is null ----
   async function startAsInitiator() {
-    if (isInitiatorCalling) return;
-    if (!userId) return alert('Register first');
+    if (!userId || isInitiatorCalling) return;
     isInitiatorCalling = true;
     try {
       const { sendData } = await initiateConnection(userId, targetId, (data) => {
@@ -394,8 +394,7 @@ export function useSocialMesh() {
   }
 
   async function startAsListener() {
-    if (isListenerCalling) return;
-    if (!userId) return alert('Register first');
+    if (!userId || isListenerCalling) return;
     isListenerCalling = true;
     try {
       const { sendData } = await waitForConnection(userId, (data) => {
@@ -410,7 +409,7 @@ export function useSocialMesh() {
     }
   }
 
-  // ---- Like ----
+  // ---- Like (unchanged) ----
   async function likePost(postId: string, authorId: string) {
     if (!userId || !privateKey) { alert('Register first'); return; }
     const allContent = getAllContent();
@@ -458,7 +457,7 @@ export function useSocialMesh() {
     }).length;
   }
 
-  // ---- Friends ----
+  // ---- Friends (unchanged) ----
   async function sendFriendRequest(targetUserId: string) {
     if (!userId || !privateKey) return alert('Register first');
     if (friends.includes(targetUserId)) return alert('Already friends');
@@ -518,7 +517,7 @@ export function useSocialMesh() {
       loadMyProfile();
       loadFriendRequests();
       loadSentRequests();
-      // Auto-listen and auto-connect to default peer
+      // Auto-listen and auto-connect ONLY after userId is set
       setTimeout(() => {
         startAsListener();
         if (defaultPeer) {
