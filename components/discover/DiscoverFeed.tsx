@@ -134,7 +134,10 @@ export function DiscoverFeed() {
                 thumbnail={video.snippet.thumbnails.medium.url}
                 channelTitle={video.snippet.channelTitle}
                 publishedAt={video.snippet.publishedAt}
-                onClick={(id: string) => setSelectedVideo(id)}
+                onClick={(id: string) => {
+                  console.log('📺 Setting selected video:', id);
+                  setSelectedVideo(id);
+                }}
               />
             ))}
           </div>
@@ -147,7 +150,10 @@ export function DiscoverFeed() {
         <YoutubePlayer
           videoId={selectedVideo}
           title={videos.find((v) => v.id === selectedVideo)?.snippet?.title || 'Video'}
-          onClose={() => setSelectedVideo(null)}
+          onClose={() => {
+            console.log('❌ Closing video player');
+            setSelectedVideo(null);
+          }}
         />
       )}
     </div>

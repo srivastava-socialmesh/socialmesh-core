@@ -16,7 +16,7 @@ export function NewsCard({ title, description, url, urlToImage, source, publishe
       className="block bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 transition hover:shadow-xl"
     >
       {urlToImage && (
-        <img src={urlToImage} alt={title} className="w-full h-48 object-cover" />
+        <img src={urlToImage} alt={title} className="w-full h-56 object-cover" />
       )}
       <div className="p-4">
         <h3 className="font-bold text-gray-800 text-lg line-clamp-2">{title}</h3>
