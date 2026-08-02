@@ -62,8 +62,10 @@ export function useSocialMesh() {
     localStorage.setItem('defaultPeer', peerId);
   }
 
+  // ---- Profile persistence ----
   async function loadMyProfile() {
     if (!userId) return;
+    // 1. Try dedicated key
     let content = getContent(`profile_${userId}`);
     if (content && content.name) {
       setMyProfile(content);
@@ -72,6 +74,7 @@ export function useSocialMesh() {
       setProfileAvatar(content.avatarHash || '');
       return;
     }
+    // 2. Scan all local storage
     const allContent = getAllContent();
     const profileId = Object.keys(allContent).find(id => {
       const c = allContent[id];
@@ -80,25 +83,358 @@ export function useSocialMesh() {
     if (profileId) {
       const c = allContent[profileId];
       setMyProfile(c);
-      setProfileName(c.name);
-      setProfileBio(c.bio);
+      setProfileName(c.name || '');
+      setProfileBio(c.bio || '');
       setProfileAvatar(c.avatarHash || '');
       saveContent(`profile_${userId}`, c);
       return;
     }
+    // 3. API fallback
     const res = await fetch(`/api/feed?userId=${userId}`);
     const data = await res.json();
     const profileActivity = data.activities?.find((a: any) => a.activity_type === 'PROFILE' && a.author_id === userId);
     if (profileActivity) {
       const c = getContent(profileActivity.activity_id);
-      if (c) {
+      if (c && c.name) {
         setMyProfile(c);
-        setProfileName(c.name || '');
-        setProfileBio(c.bio || '');
+        setProfileName(c.name);
+        setProfileBio(c.bio);
         setProfileAvatar(c.avatarHash || '');
         saveContent(`profile_${userId}`, c);
       }
     }
+  }
+
+  async function saveProfile(name: string, bio: string, avatarBase64?: string) {
+    if (!userId || !privateKey) return alert('Register first');
+    const content: Profile = { name, bio, author: userId };
+    if (avatarBase64) content.avatarHash = avatarBase64;
+    const contentHash = await hashContent(content);
+    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
+    const signature = await signActivity(privateKey, activityId, contentHash);
+    saveContent(activityId, content);
+    saveContent(`profile_${userId}`, content); // store under dedicated key
+    await fetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activityId, type: 'PROFILE', parentId: null, rootId: null, contentHash, signature, userId })
+    });
+    setMyProfile(content);
+    setProfileName(name);
+    setProfileBio(bio);
+    if (avatarBase64) setProfileAvatar(avatarBase64);
+    alert('Profile saved!');
+  }
+
+  // ---- P2P functions ----
+  let isInitiatorCalling = false;
+  let isListenerCalling = false;
+
+  async function startAsInitiator() {
+    if (!userId || isInitiatorCalling) return;
+    if (!targetId || targetId.length < 30) {
+      console.warn('Invalid targetId, must be full UUID');
+      return;
+    }
+    isInitiatorCalling = true;
+    try {
+      const { sendData } = await initiateConnection(userId, targetId, (data) => {
+        handleP2PMessage(data, sendData);
+      });
+      setSendP2P(() => sendData);
+      setConnected(true);
+      // Request DM history and content for posts from this peer
+      setTimeout(() => {
+        requestDMHistory(targetId);
+        // Request content for all posts from this author
+        feed.forEach(activity => {
+          if (activity.author_id === targetId) {
+            sendData(JSON.stringify({ type: 'request_content', activityId: activity.activity_id }));
+          }
+        });
+      }, 1000);
+    } catch (e) {
+      console.error('Initiate connection error:', e);
+    } finally {
+      isInitiatorCalling = false;
+    }
+  }
+
+  async function startAsListener() {
+    if (!userId || isListenerCalling) return;
+    isListenerCalling = true;
+    try {
+      const { sendData } = await waitForConnection(userId, (data) => {
+        handleP2PMessage(data, sendData);
+      });
+      setSendP2P(() => sendData);
+      setConnected(true);
+    } catch (e) {
+      console.error('Listen connection error:', e);
+    } finally {
+      isListenerCalling = false;
+    }
+  }
+
+  function handleP2PMessage(data: string, sendFn: (msg: string) => void) {
+    try {
+      const msg = JSON.parse(data);
+      console.log('P2P message received:', msg.type);
+      switch (msg.type) {
+        case 'request_content': {
+          const content = getContent(msg.activityId);
+          if (content) {
+            sendFn(JSON.stringify({ type: 'content_response', activityId: msg.activityId, content }));
+          } else {
+            sendFn(JSON.stringify({ type: 'content_response', activityId: msg.activityId, content: null }));
+          }
+          break;
+        }
+        case 'content_response': {
+          if (msg.content) {
+            saveContent(msg.activityId, msg.content);
+            loadFeed();
+          }
+          break;
+        }
+        case 'new_post': {
+          saveContent(msg.activityId, msg.content);
+          loadFeed();
+          break;
+        }
+        case 'request_profile': {
+          if (myProfile) sendFn(JSON.stringify({ type: 'profile_response', profile: myProfile }));
+          break;
+        }
+        case 'profile_response': {
+          const profileId = `profile_${Date.now()}`;
+          saveContent(profileId, { ...msg.profile, author: targetId });
+          alert('Profile received!');
+          break;
+        }
+        case 'dm_message': {
+          saveContent(msg.activityId, msg.content);
+          const contact = msg.content.sender;
+          setDmMessages(prev => {
+            const existing = prev[contact] || [];
+            return { ...prev, [contact]: [...existing, msg.content] };
+          });
+          if (!dmContacts.includes(contact)) setDmContacts(prev => [...prev, contact]);
+          break;
+        }
+        case 'request_dm_history': {
+          const allContent = getAllContent();
+          const dms = Object.keys(allContent)
+            .filter(id => {
+              const c = allContent[id];
+              return c.sender && c.receiver && (c.sender === msg.contactId || c.receiver === msg.contactId);
+            })
+            .map(id => allContent[id]);
+          sendFn(JSON.stringify({ type: 'dm_history_response', messages: dms }));
+          break;
+        }
+        case 'dm_history_response': {
+          msg.messages.forEach((dm: DM) => {
+            const id = `dm_${dm.sender}_${dm.receiver}_${dm.timestamp}`;
+            saveContent(id, dm);
+            const contact = dm.sender === userId ? dm.receiver : dm.sender;
+            setDmMessages(prev => {
+              const existing = prev[contact] || [];
+              if (existing.find(m => m.timestamp === dm.timestamp && m.sender === dm.sender)) return prev;
+              return { ...prev, [contact]: [...existing, dm] };
+            });
+            if (!dmContacts.includes(contact)) setDmContacts(prev => [...prev, contact]);
+          });
+          break;
+        }
+        case 'new_like': {
+          saveContent(msg.activityId, msg.content);
+          loadFeed();
+          break;
+        }
+        default: console.log('Unknown P2P message type:', msg.type);
+      }
+    } catch (e) {
+      console.error('P2P message error:', e);
+    }
+  }
+
+  // ---- Follow with auto-connect ----
+  async function followUser(targetUserId: string) {
+    if (!userId || !privateKey) return alert('Register first');
+    if (following.includes(targetUserId)) {
+      saveFollowing(following.filter(id => id !== targetUserId));
+      loadFeed();
+      return;
+    }
+    const content = { action: 'follow', target: targetUserId, timestamp: Date.now() };
+    const contentHash = await hashContent(content);
+    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
+    const signature = await signActivity(privateKey, activityId, contentHash);
+    saveContent(activityId, content);
+    await fetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activityId, type: 'FOLLOW', parentId: targetUserId, rootId: null, contentHash, signature, userId })
+    });
+    saveFollowing([...following, targetUserId]);
+    loadFeed();
+    // Auto-connect to the followed user (P2P)
+    setTargetId(targetUserId);
+    setTimeout(() => startAsInitiator(), 500);
+  }
+
+  // ---- Friend requests ----
+  async function sendFriendRequest(targetUserId: string) {
+    if (!userId || !privateKey) return alert('Register first');
+    if (friends.includes(targetUserId)) return alert('Already friends');
+    const allContent = getAllContent();
+    const existingReq = Object.keys(allContent).find(id => {
+      const c = allContent[id];
+      return c.type === 'FRIEND_REQUEST' && c.sender === userId && c.target === targetUserId;
+    });
+    if (existingReq) return alert('Request already sent');
+    const content = { type: 'FRIEND_REQUEST', sender: userId, target: targetUserId, timestamp: Date.now() };
+    const contentHash = await hashContent(content);
+    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
+    const signature = await signActivity(privateKey, activityId, contentHash);
+    saveContent(activityId, content);
+    const res = await fetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        activityId,
+        type: 'FRIEND_REQUEST',
+        parentId: targetUserId,
+        rootId: null,
+        contentHash,
+        signature,
+        userId
+      })
+    });
+    const data = await res.json();
+    console.log('📤 Friend request response:', data);
+    if (!res.ok) {
+      console.error('Failed to send friend request:', data);
+      alert('Failed to send: ' + (data.error || 'Unknown error'));
+      return;
+    }
+    alert('Friend request sent!');
+    loadFriendRequests();
+    loadSentRequests();
+  }
+
+  async function acceptFriendRequest(requestId: string, senderId: string) {
+    if (!userId || !privateKey) return alert('Register first');
+    const content = { type: 'FRIEND_ACCEPT', sender: userId, target: senderId, timestamp: Date.now() };
+    const contentHash = await hashContent(content);
+    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
+    const signature = await signActivity(privateKey, activityId, contentHash);
+    saveContent(activityId, content);
+    const res = await fetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        activityId,
+        type: 'FRIEND_ACCEPT',
+        parentId: requestId,
+        rootId: null,
+        contentHash,
+        signature,
+        userId
+      })
+    });
+    const data = await res.json();
+    console.log('✅ Friend accept response:', data);
+    if (!res.ok) {
+      console.error('Failed to accept friend request:', data);
+      alert('Failed to accept: ' + (data.error || 'Unknown error'));
+      return;
+    }
+    const newFriends = [...friends, senderId];
+    saveFriends(newFriends);
+    loadFriendRequests();
+    loadSentRequests();
+    alert('Friend request accepted!');
+  }
+
+  // ---- Fetch functions ----
+  async function loadFriendRequests() {
+    if (!userId) return;
+    const res = await fetch(`/api/feed?userId=${userId}`);
+    const data = await res.json();
+    const requests = data.activities?.filter((a: any) => 
+      a.activity_type === 'FRIEND_REQUEST' && a.parent_id === userId
+    ) || [];
+    console.log('📥 Incoming friend requests:', requests);
+    setFriendRequests(requests);
+  }
+
+  async function loadSentRequests() {
+    if (!userId) return;
+    const res = await fetch(`/api/feed?userId=${userId}`);
+    const data = await res.json();
+    const sent = data.activities?.filter((a: any) => 
+      a.activity_type === 'FRIEND_REQUEST' && a.author_id === userId
+    ) || [];
+    console.log('📤 Sent friend requests:', sent);
+    setSentRequests(sent);
+  }
+
+  function isFriendOrPending(targetUserId: string): 'friend' | 'pending' | 'none' {
+    if (friends.includes(targetUserId)) return 'friend';
+    const allContent = getAllContent();
+    const pending = Object.keys(allContent).some(id => {
+      const c = allContent[id];
+      return c.type === 'FRIEND_REQUEST' && c.sender === userId && c.target === targetUserId;
+    });
+    return pending ? 'pending' : 'none';
+  }
+
+  // ---- Core functions ----
+  async function registerIdentity() {
+    try {
+      const identity = await generateIdentity();
+      setPublicKey(identity.publicKey);
+      setPrivateKey(identity.privateKey);
+      const res = await fetch('/api/identity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publicKey: identity.publicKey, handle: `user-${Date.now()}` })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.userId) throw new Error(data.error || 'Registration failed');
+      setUserId(data.userId);
+      localStorage.setItem('userId', data.userId);
+      localStorage.setItem('publicKey', identity.publicKey);
+      localStorage.setItem('privateKey', identity.privateKey);
+      loadFollowing();
+      loadFriends();
+      loadDefaultPeer();
+      loadFeed();
+      loadMyProfile();
+      loadFriendRequests();
+      loadSentRequests();
+    } catch (error) {
+      console.error('Registration error:', error);
+      alert('Registration failed. Check console.');
+    }
+  }
+
+  function resetIdentity() {
+    localStorage.removeItem('userId');
+    localStorage.removeItem('publicKey');
+    localStorage.removeItem('privateKey');
+    localStorage.removeItem('following');
+    localStorage.removeItem('friends');
+    localStorage.removeItem('defaultPeer');
+    setUserId(null);
+    setFollowing([]);
+    setFriends([]);
+    setFeed([]);
+    setConnected(false);
+    setSendP2P(null);
+    window.location.reload();
   }
 
   async function fetchUserProfile(targetUserId: string): Promise<Profile | null> {
@@ -179,103 +515,6 @@ export function useSocialMesh() {
     }
   }
 
-  async function loadFriendRequests() {
-    if (!userId) return;
-    const res = await fetch(`/api/feed?userId=${userId}`);
-    const data = await res.json();
-    const requests = data.activities?.filter((a: any) => 
-      a.activity_type === 'FRIEND_REQUEST' && a.parent_id === userId
-    ) || [];
-    console.log('📥 Incoming friend requests:', requests);
-    setFriendRequests(requests);
-  }
-
-  async function loadSentRequests() {
-    if (!userId) return;
-    const res = await fetch(`/api/feed?userId=${userId}`);
-    const data = await res.json();
-    const sent = data.activities?.filter((a: any) => 
-      a.activity_type === 'FRIEND_REQUEST' && a.author_id === userId
-    ) || [];
-    console.log('📤 Sent friend requests:', sent);
-    setSentRequests(sent);
-  }
-
-  function isFriendOrPending(targetUserId: string): 'friend' | 'pending' | 'none' {
-    if (friends.includes(targetUserId)) return 'friend';
-    const allContent = getAllContent();
-    const pending = Object.keys(allContent).some(id => {
-      const c = allContent[id];
-      return c.type === 'FRIEND_REQUEST' && c.sender === userId && c.target === targetUserId;
-    });
-    return pending ? 'pending' : 'none';
-  }
-
-  // ---- Core functions ----
-  async function registerIdentity() {
-    try {
-      const identity = await generateIdentity();
-      setPublicKey(identity.publicKey);
-      setPrivateKey(identity.privateKey);
-      const res = await fetch('/api/identity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ publicKey: identity.publicKey, handle: `user-${Date.now()}` })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.userId) throw new Error(data.error || 'Registration failed');
-      setUserId(data.userId);
-      localStorage.setItem('userId', data.userId);
-      localStorage.setItem('publicKey', identity.publicKey);
-      localStorage.setItem('privateKey', identity.privateKey);
-      loadFollowing();
-      loadFriends();
-      loadDefaultPeer();
-      loadFeed();
-      loadMyProfile();
-      loadFriendRequests();
-      loadSentRequests();
-    } catch (error) {
-      console.error('Registration error:', error);
-      alert('Registration failed. Check console.');
-    }
-  }
-
-  function resetIdentity() {
-    localStorage.removeItem('userId');
-    localStorage.removeItem('publicKey');
-    localStorage.removeItem('privateKey');
-    localStorage.removeItem('following');
-    localStorage.removeItem('friends');
-    localStorage.removeItem('defaultPeer');
-    setUserId(null);
-    setFollowing([]);
-    setFriends([]);
-    setFeed([]);
-    setConnected(false);
-    setSendP2P(null);
-    window.location.reload();
-  }
-
-  async function saveProfile(name: string, bio: string, avatarBase64?: string) {
-    if (!userId || !privateKey) return alert('Register first');
-    const content: Profile = { name, bio, author: userId };
-    if (avatarBase64) content.avatarHash = avatarBase64;
-    const contentHash = await hashContent(content);
-    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
-    const signature = await signActivity(privateKey, activityId, contentHash);
-    saveContent(activityId, content);
-    await fetch('/api/activity', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ activityId, type: 'PROFILE', parentId: null, rootId: null, contentHash, signature, userId })
-    });
-    setMyProfile(content);
-    if (avatarBase64) setProfileAvatar(avatarBase64);
-    saveContent(`profile_${userId}`, content);
-    alert('Profile saved!');
-  }
-
   async function createPost(text: string, media?: Media) {
     const storedUserId = localStorage.getItem('userId');
     const storedPrivateKey = localStorage.getItem('privateKey');
@@ -298,27 +537,6 @@ export function useSocialMesh() {
     }
     setPostText('');
     setPostMedia(null);
-    loadFeed();
-  }
-
-  async function followUser(targetUserId: string) {
-    if (!userId || !privateKey) return alert('Register first');
-    if (following.includes(targetUserId)) {
-      saveFollowing(following.filter(id => id !== targetUserId));
-      loadFeed();
-      return;
-    }
-    const content = { action: 'follow', target: targetUserId, timestamp: Date.now() };
-    const contentHash = await hashContent(content);
-    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
-    const signature = await signActivity(privateKey, activityId, contentHash);
-    saveContent(activityId, content);
-    await fetch('/api/activity', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ activityId, type: 'FOLLOW', parentId: targetUserId, rootId: null, contentHash, signature, userId })
-    });
-    saveFollowing([...following, targetUserId]);
     loadFeed();
   }
 
@@ -355,128 +573,6 @@ export function useSocialMesh() {
   async function requestDMHistory(contact: string) {
     if (!sendP2P) return;
     sendP2P(JSON.stringify({ type: 'request_dm_history', contactId: contact }));
-  }
-
-  function handleP2PMessage(data: string, sendFn: (msg: string) => void) {
-    try {
-      const msg = JSON.parse(data);
-      console.log('P2P message received:', msg.type);
-      switch (msg.type) {
-        case 'request_content': {
-          const content = getContent(msg.activityId);
-          if (content) sendFn(JSON.stringify({ type: 'content_response', activityId: msg.activityId, content }));
-          break;
-        }
-        case 'content_response': {
-          saveContent(msg.activityId, msg.content);
-          loadFeed();
-          break;
-        }
-        case 'new_post': {
-          console.log('Received new post via P2P:', msg);
-          saveContent(msg.activityId, msg.content);
-          loadFeed();
-          break;
-        }
-        case 'request_profile': {
-          if (myProfile) sendFn(JSON.stringify({ type: 'profile_response', profile: myProfile }));
-          break;
-        }
-        case 'profile_response': {
-          const profileId = `profile_${Date.now()}`;
-          saveContent(profileId, { ...msg.profile, author: targetId });
-          alert('Profile received!');
-          break;
-        }
-        case 'dm_message': {
-          saveContent(msg.activityId, msg.content);
-          const contact = msg.content.sender;
-          setDmMessages(prev => {
-            const existing = prev[contact] || [];
-            return { ...prev, [contact]: [...existing, msg.content] };
-          });
-          if (!dmContacts.includes(contact)) {
-            setDmContacts(prev => [...prev, contact]);
-          }
-          break;
-        }
-        case 'request_dm_history': {
-          const allContent = getAllContent();
-          const dms = Object.keys(allContent)
-            .filter(id => {
-              const c = allContent[id];
-              return c.sender && c.receiver && (c.sender === msg.contactId || c.receiver === msg.contactId);
-            })
-            .map(id => allContent[id]);
-          sendFn(JSON.stringify({ type: 'dm_history_response', messages: dms }));
-          break;
-        }
-        case 'dm_history_response': {
-          msg.messages.forEach((dm: DM) => {
-            const id = `dm_${dm.sender}_${dm.receiver}_${dm.timestamp}`;
-            saveContent(id, dm);
-            const contact = dm.sender === userId ? dm.receiver : dm.sender;
-            setDmMessages(prev => {
-              const existing = prev[contact] || [];
-              if (existing.find(m => m.timestamp === dm.timestamp && m.sender === dm.sender)) return prev;
-              return { ...prev, [contact]: [...existing, dm] };
-            });
-            if (!dmContacts.includes(contact)) {
-              setDmContacts(prev => [...prev, contact]);
-            }
-          });
-          break;
-        }
-        case 'new_like': {
-          saveContent(msg.activityId, msg.content);
-          loadFeed();
-          break;
-        }
-        default: console.log('Unknown P2P message type:', msg.type);
-      }
-    } catch (e) {
-      console.error('P2P message error:', e);
-    }
-  }
-
-  let isInitiatorCalling = false;
-  let isListenerCalling = false;
-
-  async function startAsInitiator() {
-    if (!userId || isInitiatorCalling) return;
-    if (!targetId || targetId.length < 30) {
-      console.warn('Invalid targetId, must be full UUID');
-      return;
-    }
-    isInitiatorCalling = true;
-    try {
-      const { sendData } = await initiateConnection(userId, targetId, (data) => {
-        handleP2PMessage(data, sendData);
-      });
-      setSendP2P(() => sendData);
-      setConnected(true);
-      setTimeout(() => requestDMHistory(targetId), 1000);
-    } catch (e) {
-      console.error('Initiate connection error:', e);
-    } finally {
-      isInitiatorCalling = false;
-    }
-  }
-
-  async function startAsListener() {
-    if (!userId || isListenerCalling) return;
-    isListenerCalling = true;
-    try {
-      const { sendData } = await waitForConnection(userId, (data) => {
-        handleP2PMessage(data, sendData);
-      });
-      setSendP2P(() => sendData);
-      setConnected(true);
-    } catch (e) {
-      console.error('Listen connection error:', e);
-    } finally {
-      isListenerCalling = false;
-    }
   }
 
   // ---- Like ----
@@ -525,80 +621,6 @@ export function useSocialMesh() {
       const c = allContent[id];
       return c.parentId === activityId && c.action === 'LIKE';
     }).length;
-  }
-
-  // ---- Friends ----
-  async function sendFriendRequest(targetUserId: string) {
-    if (!userId || !privateKey) return alert('Register first');
-    if (friends.includes(targetUserId)) return alert('Already friends');
-    const allContent = getAllContent();
-    const existingReq = Object.keys(allContent).find(id => {
-      const c = allContent[id];
-      return c.type === 'FRIEND_REQUEST' && c.sender === userId && c.target === targetUserId;
-    });
-    if (existingReq) return alert('Request already sent');
-    const content = { type: 'FRIEND_REQUEST', sender: userId, target: targetUserId, timestamp: Date.now() };
-    const contentHash = await hashContent(content);
-    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
-    const signature = await signActivity(privateKey, activityId, contentHash);
-    saveContent(activityId, content);
-    const res = await fetch('/api/activity', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        activityId,
-        type: 'FRIEND_REQUEST',
-        parentId: targetUserId,
-        rootId: null,
-        contentHash,
-        signature,
-        userId
-      })
-    });
-    const data = await res.json();
-    console.log('📤 Friend request response:', data);
-    if (!res.ok) {
-      console.error('Failed to send friend request:', data);
-      alert('Failed to send: ' + (data.error || 'Unknown error'));
-      return;
-    }
-    alert('Friend request sent!');
-    loadFriendRequests();
-    loadSentRequests();
-  }
-
-  async function acceptFriendRequest(requestId: string, senderId: string) {
-    if (!userId || !privateKey) return alert('Register first');
-    const content = { type: 'FRIEND_ACCEPT', sender: userId, target: senderId, timestamp: Date.now() };
-    const contentHash = await hashContent(content);
-    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
-    const signature = await signActivity(privateKey, activityId, contentHash);
-    saveContent(activityId, content);
-    const res = await fetch('/api/activity', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        activityId,
-        type: 'FRIEND_ACCEPT',
-        parentId: requestId,
-        rootId: null,
-        contentHash,
-        signature,
-        userId
-      })
-    });
-    const data = await res.json();
-    console.log('✅ Friend accept response:', data);
-    if (!res.ok) {
-      console.error('Failed to accept friend request:', data);
-      alert('Failed to accept: ' + (data.error || 'Unknown error'));
-      return;
-    }
-    const newFriends = [...friends, senderId];
-    saveFriends(newFriends);
-    loadFriendRequests();
-    loadSentRequests();
-    alert('Friend request accepted!');
   }
 
   // ---- Add contact ----
