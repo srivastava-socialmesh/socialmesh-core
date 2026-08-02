@@ -292,6 +292,10 @@ export function useSocialMesh() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ activityId, type: 'POST', parentId: null, rootId: null, contentHash, signature, userId: storedUserId })
     });
+    // Broadcast to connected peers
+    if (sendP2P) {
+      sendP2P(JSON.stringify({ type: 'new_post', activityId, content, signature }));
+    }
     setPostText('');
     setPostMedia(null);
     loadFeed();
@@ -364,6 +368,12 @@ export function useSocialMesh() {
           break;
         }
         case 'content_response': {
+          saveContent(msg.activityId, msg.content);
+          loadFeed();
+          break;
+        }
+        case 'new_post': {
+          console.log('Received new post via P2P:', msg);
           saveContent(msg.activityId, msg.content);
           loadFeed();
           break;

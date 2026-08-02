@@ -18,6 +18,7 @@ interface FeedCardProps {
   onSendFriendRequest: () => void;
   onFetchP2P?: () => void;
   sendP2P: ((msg: string) => void) | null;
+  isLoading?: boolean;
 }
 
 export function FeedCard({
@@ -33,6 +34,7 @@ export function FeedCard({
   onSendFriendRequest,
   onFetchP2P,
   sendP2P,
+  isLoading,
 }: FeedCardProps) {
   const displayName = authorProfile?.name || activity.author_id.slice(0, 8);
   const avatarSrc = authorProfile?.avatarHash || undefined;
@@ -85,15 +87,27 @@ export function FeedCard({
         )}
 
         <div className="mt-4 text-gray-800 whitespace-pre-wrap text-base leading-relaxed">
-          {content ? content.text : (
+          {isLoading ? (
             <span className="text-gray-400">Loading content...</span>
+          ) : content ? (
+            content.text
+          ) : (
+            <span className="text-gray-400">Content not available. </span>
           )}
-          {!content && sendP2P && (
+          {!content && !isLoading && sendP2P && (
             <button
               className="ml-3 text-blue-500 text-sm font-medium hover:underline"
               onClick={onFetchP2P}
             >
               Fetch P2P
+            </button>
+          )}
+          {!content && !isLoading && !sendP2P && (
+            <button
+              className="ml-3 text-blue-500 text-sm font-medium hover:underline"
+              onClick={onFetchP2P}
+            >
+              Fetch from Server
             </button>
           )}
         </div>
