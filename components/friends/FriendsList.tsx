@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSocialMesh } from '@/hooks/useSocialMesh';
 import { Avatar } from '@/components/common';
-import { getContent } from '@/lib/storage';
 
 export function FriendsList() {
   const { 
@@ -23,15 +22,11 @@ export function FriendsList() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Load requests when userId changes
   useEffect(() => {
     if (userId) {
-      try {
-        loadFriendRequests();
-        loadSentRequests();
-      } catch (err) {
-        console.error('Error loading friend data:', err);
-        setError('Failed to load friend data');
-      }
+      loadFriendRequests();
+      loadSentRequests();
     }
   }, [userId]);
 
@@ -62,36 +57,10 @@ export function FriendsList() {
 
   const status = searchResult ? isFriendOrPending?.(searchResult.userId) || 'none' : 'none';
 
-  // Helper to get target user ID from a sent request
-  const getTargetFromSent = (req: any) => {
-    // First check content stored locally
-    const content = getContent(req.activity_id);
-    if (content && content.target) return content.target;
-    // Fallback to parent_id
-    if (req.parent_id) return req.parent_id;
-    return null;
-  };
-
-  if (error) {
-    return (
-      <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-        <p className="text-red-500">{error}</p>
-        <button onClick={() => setError(null)} className="text-blue-500">Dismiss</button>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
       <h2 className="text-xl font-bold mb-4">Friends</h2>
       
-      <button 
-        onClick={() => { loadFriendRequests(); loadSentRequests(); }}
-        className="bg-gray-200 text-sm px-3 py-1 rounded-full mb-4"
-      >
-        Refresh
-      </button>
-
       {/* Search */}
       <div className="flex gap-2 mb-4">
         <input
@@ -171,15 +140,12 @@ export function FriendsList() {
       {!sentRequests || sentRequests.length === 0 ? (
         <p className="text-gray-500">No sent requests</p>
       ) : (
-        sentRequests.map((req: any) => {
-          const target = getTargetFromSent(req);
-          return (
-            <div key={req.activity_id} className="flex items-center justify-between py-2">
-              <span>To: {target ? target.slice(0, 8) : 'Unknown'}</span>
-              <span className="text-yellow-500 text-sm">Pending</span>
-            </div>
-          );
-        })
+        sentRequests.map((req: any) => (
+          <div key={req.activity_id} className="flex items-center justify-between py-2">
+            <span>To: {req.parent_id?.slice(0, 8) || 'Unknown'}</span>
+            <span className="text-yellow-500 text-sm">Pending</span>
+          </div>
+        ))
       )}
     </div>
   );
