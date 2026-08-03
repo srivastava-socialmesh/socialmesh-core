@@ -22,6 +22,15 @@ export function ProfileCard({
   const [isEditing, setIsEditing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Update local state when profile prop changes
+  useState(() => {
+    if (profile) {
+      setName(profile.name || '');
+      setBio(profile.bio || '');
+      setAvatarPreview(profile.avatarHash || '');
+    }
+  });
+
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;

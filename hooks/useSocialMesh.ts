@@ -62,19 +62,25 @@ export function useSocialMesh() {
     localStorage.setItem('defaultPeer', peerId);
   }
 
-  // ---- Profile persistence ----
+  // ---- Profile persistence with logging ----
   async function loadMyProfile() {
-    if (!userId) return;
-    // Try dedicated key
+    if (!userId) {
+      console.log('❌ loadMyProfile: no userId');
+      return;
+    }
+    console.log('🔍 loadMyProfile for userId:', userId);
+    // 1. Try dedicated key
     let content = getContent(`profile_${userId}`);
+    console.log('📦 loadMyProfile: from dedicated key', content);
     if (content && content.name) {
       setMyProfile(content);
       setProfileName(content.name);
       setProfileBio(content.bio);
       setProfileAvatar(content.avatarHash || '');
+      console.log('✅ loadMyProfile: loaded from dedicated key');
       return;
     }
-    // Scan all local storage
+    // 2. Scan all local storage
     const allContent = getAllContent();
     const profileId = Object.keys(allContent).find(id => {
       const c = allContent[id];
@@ -87,9 +93,11 @@ export function useSocialMesh() {
       setProfileBio(c.bio || '');
       setProfileAvatar(c.avatarHash || '');
       saveContent(`profile_${userId}`, c);
+      console.log('✅ loadMyProfile: found in allContent, key:', profileId);
       return;
     }
-    // API fallback
+    // 3. API fallback
+    console.log('🔄 loadMyProfile: fetching from API');
     const res = await fetch(`/api/feed?userId=${userId}`);
     const data = await res.json();
     const profileActivity = data.activities?.find((a: any) => a.activity_type === 'PROFILE' && a.author_id === userId);
@@ -101,12 +109,16 @@ export function useSocialMesh() {
         setProfileBio(c.bio);
         setProfileAvatar(c.avatarHash || '');
         saveContent(`profile_${userId}`, c);
+        console.log('✅ loadMyProfile: loaded from API');
+        return;
       }
     }
+    console.log('❌ loadMyProfile: no profile found');
   }
 
   async function saveProfile(name: string, bio: string, avatarBase64?: string) {
     if (!userId || !privateKey) return alert('Register first');
+    console.log('💾 saveProfile:', { name, bio, avatarBase64: !!avatarBase64 });
     const content: Profile = { name, bio, author: userId };
     if (avatarBase64) content.avatarHash = avatarBase64;
     const contentHash = await hashContent(content);
@@ -123,6 +135,7 @@ export function useSocialMesh() {
     setProfileName(name);
     setProfileBio(bio);
     if (avatarBase64) setProfileAvatar(avatarBase64);
+    console.log('✅ saveProfile: saved');
     alert('Profile saved!');
   }
 
@@ -133,9 +146,10 @@ export function useSocialMesh() {
   async function startAsInitiator() {
     if (!userId || isInitiatorCalling) return;
     if (!targetId || targetId.length < 30) {
-      console.warn('Invalid targetId, must be full UUID');
+      console.warn('⚠️ startAsInitiator: invalid targetId', targetId);
       return;
     }
+    console.log('📞 startAsInitiator: calling', targetId);
     isInitiatorCalling = true;
     try {
       const { sendData } = await initiateConnection(userId, targetId, (data) => {
@@ -143,6 +157,7 @@ export function useSocialMesh() {
       });
       setSendP2P(() => sendData);
       setConnected(true);
+      console.log('✅ P2P connected (initiator)');
       // Request DM history and content for posts from this peer
       setTimeout(() => {
         requestDMHistory(targetId);
@@ -153,7 +168,7 @@ export function useSocialMesh() {
         });
       }, 1000);
     } catch (e) {
-      console.error('Initiate connection error:', e);
+      console.error('❌ startAsInitiator error:', e);
     } finally {
       isInitiatorCalling = false;
     }
@@ -161,6 +176,7 @@ export function useSocialMesh() {
 
   async function startAsListener() {
     if (!userId || isListenerCalling) return;
+    console.log('👂 startAsListener: listening');
     isListenerCalling = true;
     try {
       const { sendData } = await waitForConnection(userId, (data) => {
@@ -168,8 +184,9 @@ export function useSocialMesh() {
       });
       setSendP2P(() => sendData);
       setConnected(true);
+      console.log('✅ P2P connected (listener)');
     } catch (e) {
-      console.error('Listen connection error:', e);
+      console.error('❌ startAsListener error:', e);
     } finally {
       isListenerCalling = false;
     }
@@ -178,7 +195,7 @@ export function useSocialMesh() {
   function handleP2PMessage(data: string, sendFn: (msg: string) => void) {
     try {
       const msg = JSON.parse(data);
-      console.log('P2P message received:', msg.type);
+      console.log('📨 P2P message received:', msg.type);
       switch (msg.type) {
         case 'request_content': {
           const content = getContent(msg.activityId);
@@ -254,13 +271,14 @@ export function useSocialMesh() {
         default: console.log('Unknown P2P message type:', msg.type);
       }
     } catch (e) {
-      console.error('P2P message error:', e);
+      console.error('❌ P2P message error:', e);
     }
   }
 
   // ---- Follow with auto-connect ----
   async function followUser(targetUserId: string) {
     if (!userId || !privateKey) return alert('Register first');
+    console.log('🔗 followUser:', targetUserId);
     if (following.includes(targetUserId)) {
       saveFollowing(following.filter(id => id !== targetUserId));
       loadFeed();
@@ -280,6 +298,7 @@ export function useSocialMesh() {
     loadFeed();
     // Auto-connect to the followed user (P2P)
     setTargetId(targetUserId);
+    console.log('🚀 Auto-connecting to followed user:', targetUserId);
     setTimeout(() => startAsInitiator(), 500);
   }
 
@@ -509,6 +528,7 @@ export function useSocialMesh() {
         activities = activities.filter((a: any) => following.includes(a.author_id));
       }
       setFeed(activities);
+      console.log('📰 Feed loaded:', activities.length, 'posts');
     } catch (e) {
       console.error('Failed to load feed:', e);
     }
@@ -646,6 +666,7 @@ export function useSocialMesh() {
     const savedUserId = localStorage.getItem('userId');
     const savedPubKey = localStorage.getItem('publicKey');
     const savedPrivKey = localStorage.getItem('privateKey');
+    console.log('🔑 savedUserId:', savedUserId);
     if (savedUserId && savedPubKey && savedPrivKey) {
       setUserId(savedUserId);
       setPublicKey(savedPubKey);
