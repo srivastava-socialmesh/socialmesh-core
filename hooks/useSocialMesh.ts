@@ -69,7 +69,6 @@ export function useSocialMesh() {
       return;
     }
     console.log('🔍 loadMyProfile for userId:', userId);
-    // 1. Try dedicated key
     let content = getContent(`profile_${userId}`);
     console.log('📦 loadMyProfile: from dedicated key', content);
     if (content && content.name) {
@@ -80,7 +79,6 @@ export function useSocialMesh() {
       console.log('✅ loadMyProfile: loaded from dedicated key');
       return;
     }
-    // 2. Scan all local storage
     const allContent = getAllContent();
     const profileId = Object.keys(allContent).find(id => {
       const c = allContent[id];
@@ -96,7 +94,6 @@ export function useSocialMesh() {
       console.log('✅ loadMyProfile: found in allContent, key:', profileId);
       return;
     }
-    // 3. API fallback
     console.log('🔄 loadMyProfile: fetching from API');
     const res = await fetch(`/api/feed?userId=${userId}`);
     const data = await res.json();
@@ -143,7 +140,6 @@ export function useSocialMesh() {
   let isInitiatorCalling = false;
   let isListenerCalling = false;
 
-  // Modified: accept optional target parameter
   async function startAsInitiator(target?: string) {
     const peer = target || targetId;
     if (!userId || isInitiatorCalling) return;
@@ -160,7 +156,6 @@ export function useSocialMesh() {
       setSendP2P(() => sendData);
       setConnected(true);
       console.log('✅ P2P connected (initiator)');
-      // Request DM history and content for posts from this peer
       setTimeout(() => {
         requestDMHistory(peer);
         feed.forEach(activity => {
@@ -298,13 +293,12 @@ export function useSocialMesh() {
     });
     saveFollowing([...following, targetUserId]);
     loadFeed();
-    // Auto-connect to the followed user – pass target directly
     console.log('🚀 Auto-connecting to followed user:', targetUserId);
-    setTargetId(targetUserId); // also update state for UI
+    setTargetId(targetUserId);
     startAsInitiator(targetUserId);
   }
 
-  // ---- Friend requests ----
+  // ---- Friend requests with logging ----
   async function sendFriendRequest(targetUserId: string) {
     if (!userId || !privateKey) return alert('Register first');
     if (friends.includes(targetUserId)) return alert('Already friends');
@@ -319,18 +313,20 @@ export function useSocialMesh() {
     const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
     const signature = await signActivity(privateKey, activityId, contentHash);
     saveContent(activityId, content);
+    const payload = {
+      activityId,
+      type: 'FRIEND_REQUEST',
+      parentId: targetUserId,
+      rootId: null,
+      contentHash,
+      signature,
+      userId
+    };
+    console.log('📤 Sending friend request payload:', payload);
     const res = await fetch('/api/activity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        activityId,
-        type: 'FRIEND_REQUEST',
-        parentId: targetUserId,
-        rootId: null,
-        contentHash,
-        signature,
-        userId
-      })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     console.log('📤 Friend request response:', data);
@@ -351,18 +347,20 @@ export function useSocialMesh() {
     const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
     const signature = await signActivity(privateKey, activityId, contentHash);
     saveContent(activityId, content);
+    const payload = {
+      activityId,
+      type: 'FRIEND_ACCEPT',
+      parentId: requestId,
+      rootId: null,
+      contentHash,
+      signature,
+      userId
+    };
+    console.log('✅ Accepting friend request payload:', payload);
     const res = await fetch('/api/activity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        activityId,
-        type: 'FRIEND_ACCEPT',
-        parentId: requestId,
-        rootId: null,
-        contentHash,
-        signature,
-        userId
-      })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     console.log('✅ Friend accept response:', data);
@@ -378,11 +376,12 @@ export function useSocialMesh() {
     alert('Friend request accepted!');
   }
 
-  // ---- Fetch functions ----
+  // ---- Fetch functions with logging ----
   async function loadFriendRequests() {
     if (!userId) return;
     const res = await fetch(`/api/feed?userId=${userId}`);
     const data = await res.json();
+    console.log('📥 loadFriendRequests raw data:', data);
     const requests = data.activities?.filter((a: any) => 
       a.activity_type === 'FRIEND_REQUEST' && a.parent_id === userId
     ) || [];
@@ -394,6 +393,7 @@ export function useSocialMesh() {
     if (!userId) return;
     const res = await fetch(`/api/feed?userId=${userId}`);
     const data = await res.json();
+    console.log('📤 loadSentRequests raw data:', data);
     const sent = data.activities?.filter((a: any) => 
       a.activity_type === 'FRIEND_REQUEST' && a.author_id === userId
     ) || [];
@@ -432,7 +432,6 @@ export function useSocialMesh() {
       loadFriends();
       loadDefaultPeer();
       loadFeed();
-      // loadMyProfile will be called via the useEffect below
       loadFriendRequests();
       loadSentRequests();
     } catch (error) {
@@ -690,7 +689,7 @@ export function useSocialMesh() {
         startAsListener();
         if (defaultPeer) {
           setTargetId(defaultPeer);
-          startAsInitiator(defaultPeer); // pass directly
+          startAsInitiator(defaultPeer);
         }
       }, 1000);
     } else {
