@@ -62,7 +62,7 @@ export function useSocialMesh() {
     localStorage.setItem('defaultPeer', peerId);
   }
 
-  // ---- Profile persistence with logging ----
+  // ---- Profile persistence ----
   async function loadMyProfile() {
     if (!userId) {
       console.log('❌ loadMyProfile: no userId');
@@ -143,16 +143,18 @@ export function useSocialMesh() {
   let isInitiatorCalling = false;
   let isListenerCalling = false;
 
-  async function startAsInitiator() {
+  // Modified: accept optional target parameter
+  async function startAsInitiator(target?: string) {
+    const peer = target || targetId;
     if (!userId || isInitiatorCalling) return;
-    if (!targetId || targetId.length < 30) {
-      console.warn('⚠️ startAsInitiator: invalid targetId', targetId);
+    if (!peer || peer.length < 30) {
+      console.warn('⚠️ startAsInitiator: invalid target', peer);
       return;
     }
-    console.log('📞 startAsInitiator: calling', targetId);
+    console.log('📞 startAsInitiator: calling', peer);
     isInitiatorCalling = true;
     try {
-      const { sendData } = await initiateConnection(userId, targetId, (data) => {
+      const { sendData } = await initiateConnection(userId, peer, (data) => {
         handleP2PMessage(data, sendData);
       });
       setSendP2P(() => sendData);
@@ -160,9 +162,9 @@ export function useSocialMesh() {
       console.log('✅ P2P connected (initiator)');
       // Request DM history and content for posts from this peer
       setTimeout(() => {
-        requestDMHistory(targetId);
+        requestDMHistory(peer);
         feed.forEach(activity => {
-          if (activity.author_id === targetId) {
+          if (activity.author_id === peer) {
             sendData(JSON.stringify({ type: 'request_content', activityId: activity.activity_id }));
           }
         });
@@ -296,10 +298,10 @@ export function useSocialMesh() {
     });
     saveFollowing([...following, targetUserId]);
     loadFeed();
-    // Auto-connect to the followed user (P2P)
-    setTargetId(targetUserId);
+    // Auto-connect to the followed user – pass target directly
     console.log('🚀 Auto-connecting to followed user:', targetUserId);
-    setTimeout(() => startAsInitiator(), 500);
+    setTargetId(targetUserId); // also update state for UI
+    startAsInitiator(targetUserId);
   }
 
   // ---- Friend requests ----
@@ -430,7 +432,7 @@ export function useSocialMesh() {
       loadFriends();
       loadDefaultPeer();
       loadFeed();
-      loadMyProfile();
+      // loadMyProfile will be called via the useEffect below
       loadFriendRequests();
       loadSentRequests();
     } catch (error) {
@@ -661,6 +663,13 @@ export function useSocialMesh() {
     }
   }, [connected, targetId]);
 
+  // ---- Load profile whenever userId changes ----
+  useEffect(() => {
+    if (userId) {
+      loadMyProfile();
+    }
+  }, [userId]);
+
   // ---- useEffect for initialization ----
   useEffect(() => {
     const savedUserId = localStorage.getItem('userId');
@@ -675,14 +684,13 @@ export function useSocialMesh() {
       loadFriends();
       loadDefaultPeer();
       loadFeed();
-      loadMyProfile();
       loadFriendRequests();
       loadSentRequests();
       setTimeout(() => {
         startAsListener();
         if (defaultPeer) {
           setTargetId(defaultPeer);
-          setTimeout(() => startAsInitiator(), 1500);
+          startAsInitiator(defaultPeer); // pass directly
         }
       }, 1000);
     } else {
