@@ -9,12 +9,6 @@ type Profile = { name: string; bio: string; avatarHash?: string; author?: string
 type DM = { text: string; sender: string; receiver: string; timestamp: number };
 type Media = { type: 'image' | 'video'; data: string };
 
-// Supabase admin client (bypasses RLS) – uses SERVICE_ROLE_KEY
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export function useSocialMesh() {
   // ---- State ----
   const [userId, setUserId] = useState<string | null>(null);
@@ -252,40 +246,38 @@ export function useSocialMesh() {
     });
     saveFollowing([...following, targetUserId]);
     loadFeed();
-    // Auto-connect P2P
+    // Auto-connect
     setTargetId(targetUserId);
     startAsInitiator(targetUserId);
   }
 
-  // ---- Friend requests (Direct Supabase) ----
+  // ---- Friend requests (using API, safe for browser) ----
   async function loadFriendRequests() {
     if (!userId) return;
-    const { data, error } = await supabaseAdmin
-      .from('activities')
-      .select('*')
-      .eq('activity_type', 'FRIEND_REQUEST')
-      .eq('parent_id', userId)
-      .order('created_at', { ascending: false });
-    if (error) {
-      console.error('Error loading friend requests:', error);
-      return;
+    try {
+      const res = await fetch(`/api/feed?userId=${userId}`);
+      const data = await res.json();
+      const requests = data.activities?.filter((a: any) => 
+        a.activity_type === 'FRIEND_REQUEST' && a.parent_id === userId
+      ) || [];
+      setFriendRequests(requests);
+    } catch (e) {
+      console.error('Failed to load friend requests:', e);
     }
-    setFriendRequests(data || []);
   }
 
   async function loadSentRequests() {
     if (!userId) return;
-    const { data, error } = await supabaseAdmin
-      .from('activities')
-      .select('*')
-      .eq('activity_type', 'FRIEND_REQUEST')
-      .eq('author_id', userId)
-      .order('created_at', { ascending: false });
-    if (error) {
-      console.error('Error loading sent requests:', error);
-      return;
+    try {
+      const res = await fetch(`/api/feed?userId=${userId}`);
+      const data = await res.json();
+      const sent = data.activities?.filter((a: any) => 
+        a.activity_type === 'FRIEND_REQUEST' && a.author_id === userId
+      ) || [];
+      setSentRequests(sent);
+    } catch (e) {
+      console.error('Failed to load sent requests:', e);
     }
-    setSentRequests(data || []);
   }
 
   function isFriendOrPending(targetUserId: string): 'friend' | 'pending' | 'none' {
