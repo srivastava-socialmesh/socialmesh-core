@@ -22,7 +22,6 @@ export function FriendsList() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load requests when userId changes
   useEffect(() => {
     if (userId) {
       loadFriendRequests();
@@ -61,7 +60,6 @@ export function FriendsList() {
     <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
       <h2 className="text-xl font-bold mb-4">Friends</h2>
       
-      {/* Search */}
       <div className="flex gap-2 mb-4">
         <input
           type="text"

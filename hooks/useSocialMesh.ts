@@ -65,7 +65,7 @@ export function useSocialMesh() {
   // ---- Profile persistence ----
   async function loadMyProfile() {
     if (!userId) return;
-    // 1. Try dedicated key
+    // Try dedicated key
     let content = getContent(`profile_${userId}`);
     if (content && content.name) {
       setMyProfile(content);
@@ -74,7 +74,7 @@ export function useSocialMesh() {
       setProfileAvatar(content.avatarHash || '');
       return;
     }
-    // 2. Scan all local storage
+    // Scan all local storage
     const allContent = getAllContent();
     const profileId = Object.keys(allContent).find(id => {
       const c = allContent[id];
@@ -89,7 +89,7 @@ export function useSocialMesh() {
       saveContent(`profile_${userId}`, c);
       return;
     }
-    // 3. API fallback
+    // API fallback
     const res = await fetch(`/api/feed?userId=${userId}`);
     const data = await res.json();
     const profileActivity = data.activities?.find((a: any) => a.activity_type === 'PROFILE' && a.author_id === userId);
@@ -113,7 +113,7 @@ export function useSocialMesh() {
     const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
     const signature = await signActivity(privateKey, activityId, contentHash);
     saveContent(activityId, content);
-    saveContent(`profile_${userId}`, content); // store under dedicated key
+    saveContent(`profile_${userId}`, content);
     await fetch('/api/activity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -146,7 +146,6 @@ export function useSocialMesh() {
       // Request DM history and content for posts from this peer
       setTimeout(() => {
         requestDMHistory(targetId);
-        // Request content for all posts from this author
         feed.forEach(activity => {
           if (activity.author_id === targetId) {
             sendData(JSON.stringify({ type: 'request_content', activityId: activity.activity_id }));
@@ -531,7 +530,6 @@ export function useSocialMesh() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ activityId, type: 'POST', parentId: null, rootId: null, contentHash, signature, userId: storedUserId })
     });
-    // Broadcast to connected peers
     if (sendP2P) {
       sendP2P(JSON.stringify({ type: 'new_post', activityId, content, signature }));
     }

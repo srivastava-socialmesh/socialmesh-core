@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 export function FeedList() {
   const { 
+    userId,
     feed, following, getLikeCount, followUser, sendP2P, likePost, hasLiked, 
     isFriendOrPending, sendFriendRequest, fetchUserProfile, profiles 
   } = useSocialMesh();
@@ -12,7 +13,6 @@ export function FeedList() {
   const [authorProfiles, setAuthorProfiles] = useState<Record<string, any>>({});
   const [loadingContent, setLoadingContent] = useState<Record<string, boolean>>({});
 
-  // Fetch content from API if not in local storage
   const fetchContentFromAPI = async (activityId: string) => {
     setLoadingContent(prev => ({ ...prev, [activityId]: true }));
     try {
@@ -79,6 +79,7 @@ export function FeedList() {
         const friendStatus = isFriendOrPending(activity.author_id);
         const authorProfile = authorProfiles[activity.author_id] || profiles[activity.author_id] || null;
         const isLoading = loadingContent[activity.activity_id];
+        const isOwnPost = activity.author_id === userId;
         return (
           <FeedCard
             key={activity.activity_id}
@@ -89,6 +90,7 @@ export function FeedList() {
             hasLiked={liked}
             friendStatus={friendStatus}
             authorProfile={authorProfile}
+            isOwnPost={isOwnPost}
             onFollow={() => followUser(activity.author_id)}
             onLike={() => likePost(activity.activity_id, activity.author_id)}
             onSendFriendRequest={() => sendFriendRequest(activity.author_id)}
