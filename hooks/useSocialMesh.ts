@@ -251,36 +251,34 @@ export function useSocialMesh() {
     startAsInitiator(targetUserId);
   }
 
-  // ---- Friend requests (using API, safe for browser) ----
+  // ---- Friend requests (using API) ----
   async function loadFriendRequests() {
-  if (!userId) return;
-  try {
-    const res = await fetch(`/api/feed?includeAll=true&userId=${userId}`);
-    const data = await res.json();
-    const requests = data.activities?.filter((a: any) => 
-      a.activity_type === 'FRIEND_REQUEST' && a.parent_id === userId
-    ) || [];
-    console.log('📥 Incoming friend requests:', requests);
-    setFriendRequests(requests);
-  } catch (e) {
-    console.error('Failed to load friend requests:', e);
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/feed?includeAll=true&userId=${userId}`);
+      const data = await res.json();
+      const requests = data.activities?.filter((a: any) => 
+        a.activity_type === 'FRIEND_REQUEST' && a.parent_id === userId
+      ) || [];
+      setFriendRequests(requests);
+    } catch (e) {
+      console.error('Failed to load friend requests:', e);
+    }
   }
-}
 
   async function loadSentRequests() {
-  if (!userId) return;
-  try {
-    const res = await fetch(`/api/feed?includeAll=true&userId=${userId}`);
-    const data = await res.json();
-    const sent = data.activities?.filter((a: any) => 
-      a.activity_type === 'FRIEND_REQUEST' && a.author_id === userId
-    ) || [];
-    console.log('📤 Sent friend requests:', sent);
-    setSentRequests(sent);
-  } catch (e) {
-    console.error('Failed to load sent requests:', e);
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/feed?includeAll=true&userId=${userId}`);
+      const data = await res.json();
+      const sent = data.activities?.filter((a: any) => 
+        a.activity_type === 'FRIEND_REQUEST' && a.author_id === userId
+      ) || [];
+      setSentRequests(sent);
+    } catch (e) {
+      console.error('Failed to load sent requests:', e);
+    }
   }
-}
 
   function isFriendOrPending(targetUserId: string): 'friend' | 'pending' | 'none' {
     if (friends.includes(targetUserId)) return 'friend';
@@ -329,84 +327,42 @@ export function useSocialMesh() {
     loadSentRequests();
   }
 
-  // hooks/useSocialMesh.ts
-// ... (everything before acceptFriendRequest remains the same)
-
-async function acceptFriendRequest(requestId: string, senderId: string) {
-  if (!userId || !privateKey) return alert('Register first');
-  const content = { type: 'FRIEND_ACCEPT', sender: userId, target: senderId, timestamp: Date.now() };
-  const contentHash = await hashContent(content);
-  const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
-  const signature = await signActivity(privateKey, activityId, contentHash);
-  saveContent(activityId, content);
-  const res = await fetch('/api/activity', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      activityId,
-      type: 'FRIEND_ACCEPT',
-      parentId: requestId,
-      rootId: null,
-      contentHash,
-      signature,
-      userId
-    })
-  });
-  if (!res.ok) {
-    const data = await res.json();
-    alert('Failed to accept: ' + (data.error || 'Unknown error'));
-    return;
-  }
-  // Add to friends list locally
-  const newFriends = [...friends, senderId];
-  saveFriends(newFriends);
-  // Broadcast to sender via P2P
-  if (sendP2P) {
-    sendP2P(JSON.stringify({ type: 'friend_accepted', senderId, receiverId: userId }));
-  }
-  loadFriendRequests();
-  loadSentRequests();
-  alert('Friend request accepted!');
-}
-
-// Add a new case in handleP2PMessage:
-case 'friend_accepted': {
-  // The other user accepted our friend request
-  const newFriend = msg.senderId; // the one who accepted
-  const updatedFriends = [...friends, newFriend];
-  saveFriends(updatedFriends);
-  setFriends(updatedFriends);
-  break;
-}
-
-// Also, when P2P connects, auto‑fetch content for posts from the connected peer
-// Add this inside startAsInitiator and startAsListener (already does it in initiator, but for listener too)
-// Modify startAsListener to also request content:
-async function startAsListener() {
-  if (!userId || isListenerCalling) return;
-  isListenerCalling = true;
-  try {
-    const { sendData } = await waitForConnection(userId, (data) => {
-      handleP2PMessage(data, sendData);
+  async function acceptFriendRequest(requestId: string, senderId: string) {
+    if (!userId || !privateKey) return alert('Register first');
+    const content = { type: 'FRIEND_ACCEPT', sender: userId, target: senderId, timestamp: Date.now() };
+    const contentHash = await hashContent(content);
+    const activityId = await hashContent({ author: userId, contentHash, nonce: Math.random() });
+    const signature = await signActivity(privateKey, activityId, contentHash);
+    saveContent(activityId, content);
+    const res = await fetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        activityId,
+        type: 'FRIEND_ACCEPT',
+        parentId: requestId,
+        rootId: null,
+        contentHash,
+        signature,
+        userId
+      })
     });
-    setSendP2P(() => sendData);
-    setConnected(true);
-    // After connection, request content for all posts from this peer (targetId)
-    setTimeout(() => {
-      if (targetId) {
-        feed.forEach(activity => {
-          if (activity.author_id === targetId) {
-            sendData(JSON.stringify({ type: 'request_content', activityId: activity.activity_id }));
-          }
-        });
-      }
-    }, 1000);
-  } catch (e) {
-    console.error('P2P listen error:', e);
-  } finally {
-    isListenerCalling = false;
+    if (!res.ok) {
+      const data = await res.json();
+      alert('Failed to accept: ' + (data.error || 'Unknown error'));
+      return;
+    }
+    // Add to friends list
+    const newFriends = [...friends, senderId];
+    saveFriends(newFriends);
+    // Broadcast to sender via P2P
+    if (sendP2P) {
+      sendP2P(JSON.stringify({ type: 'friend_accepted', senderId, receiverId: userId }));
+    }
+    loadFriendRequests();
+    loadSentRequests();
+    alert('Friend request accepted!');
   }
-}
 
   // ---- P2P ----
   let isInitiatorCalling = false;
@@ -450,6 +406,16 @@ async function startAsListener() {
       });
       setSendP2P(() => sendData);
       setConnected(true);
+      // After connection, request content for posts from this peer (targetId)
+      setTimeout(() => {
+        if (targetId) {
+          feed.forEach(activity => {
+            if (activity.author_id === targetId) {
+              sendData(JSON.stringify({ type: 'request_content', activityId: activity.activity_id }));
+            }
+          });
+        }
+      }, 1000);
     } catch (e) {
       console.error('P2P listen error:', e);
     } finally {
@@ -463,7 +429,11 @@ async function startAsListener() {
       switch (msg.type) {
         case 'request_content': {
           const content = getContent(msg.activityId);
-          if (content) sendFn(JSON.stringify({ type: 'content_response', activityId: msg.activityId, content }));
+          if (content) {
+            sendFn(JSON.stringify({ type: 'content_response', activityId: msg.activityId, content }));
+          } else {
+            sendFn(JSON.stringify({ type: 'content_response', activityId: msg.activityId, content: null }));
+          }
           break;
         }
         case 'content_response': {
@@ -526,6 +496,14 @@ async function startAsListener() {
         case 'new_like': {
           saveContent(msg.activityId, msg.content);
           loadFeed();
+          break;
+        }
+        case 'friend_accepted': {
+          // The other user accepted our friend request
+          const newFriend = msg.senderId;
+          const updatedFriends = [...friends, newFriend];
+          saveFriends(updatedFriends);
+          setFriends(updatedFriends);
           break;
         }
         default: console.log('Unknown P2P message type:', msg.type);
