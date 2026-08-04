@@ -253,32 +253,34 @@ export function useSocialMesh() {
 
   // ---- Friend requests (using API, safe for browser) ----
   async function loadFriendRequests() {
-    if (!userId) return;
-    try {
-      const res = await fetch(`/api/feed?userId=${userId}`);
-      const data = await res.json();
-      const requests = data.activities?.filter((a: any) => 
-        a.activity_type === 'FRIEND_REQUEST' && a.parent_id === userId
-      ) || [];
-      setFriendRequests(requests);
-    } catch (e) {
-      console.error('Failed to load friend requests:', e);
-    }
+  if (!userId) return;
+  try {
+    const res = await fetch(`/api/feed?includeAll=true&userId=${userId}`);
+    const data = await res.json();
+    const requests = data.activities?.filter((a: any) => 
+      a.activity_type === 'FRIEND_REQUEST' && a.parent_id === userId
+    ) || [];
+    console.log('📥 Incoming friend requests:', requests);
+    setFriendRequests(requests);
+  } catch (e) {
+    console.error('Failed to load friend requests:', e);
   }
+}
 
   async function loadSentRequests() {
-    if (!userId) return;
-    try {
-      const res = await fetch(`/api/feed?userId=${userId}`);
-      const data = await res.json();
-      const sent = data.activities?.filter((a: any) => 
-        a.activity_type === 'FRIEND_REQUEST' && a.author_id === userId
-      ) || [];
-      setSentRequests(sent);
-    } catch (e) {
-      console.error('Failed to load sent requests:', e);
-    }
+  if (!userId) return;
+  try {
+    const res = await fetch(`/api/feed?includeAll=true&userId=${userId}`);
+    const data = await res.json();
+    const sent = data.activities?.filter((a: any) => 
+      a.activity_type === 'FRIEND_REQUEST' && a.author_id === userId
+    ) || [];
+    console.log('📤 Sent friend requests:', sent);
+    setSentRequests(sent);
+  } catch (e) {
+    console.error('Failed to load sent requests:', e);
   }
+}
 
   function isFriendOrPending(targetUserId: string): 'friend' | 'pending' | 'none' {
     if (friends.includes(targetUserId)) return 'friend';
